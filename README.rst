@@ -10,6 +10,9 @@ C++ Format
 .. image:: https://readthedocs.org/projects/cppformat/badge/?version=stable
    :target: http://cppformat.readthedocs.org/en/stable/
    :alt: Documentation Status
+   
+.. image:: https://webapi.biicode.com/v1/badges/vitaut/vitaut/cppformat/master
+  :target: https://www.biicode.com/vitaut/cppformat
 
 C++ Format is an open-source formatting library for C++.
 It can be used as a safe alternative to printf or as a fast
@@ -120,11 +123,10 @@ accept variable number of arguments.
 Projects using this library
 ---------------------------
 
+* `0 A.D. <http://play0ad.com/>`_: A free, open-source, cross-platform real-time strategy game
+
 * `AMPL/MP <https://github.com/ampl/mp>`_:
   An open-source library for mathematical programming
-
-* `Saddy <https://code.google.com/p/saddy/>`_:
-  Small crossplatform 2D graphic engine
 
 * `HarpyWar/pvpgn <https://github.com/HarpyWar/pvpgn>`_:
   Player vs Player Gaming Network with tweaks
@@ -135,10 +137,15 @@ Projects using this library
 
 * `readpe <https://bitbucket.org/sys_dev/readpe>`_: Read Portable Executable
 
+* `Saddy <https://code.google.com/p/saddy/>`_:
+  Small crossplatform 2D graphic engine
+
 * `Salesforce Analytics Cloud <http://www.salesforce.com/analytics-cloud/overview/>`_:
   Business intelligence software
 
 * `spdlog <https://github.com/gabime/spdlog>`_: Super fast C++ logging library
+
+`More... <https://github.com/search?q=cppformat&type=Code>`_
 
 If you are aware of other projects using this library, please let me know
 by `email <mailto:victor.zverovich@gmail.com>`_ or by submitting an

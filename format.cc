@@ -66,10 +66,10 @@ using fmt::internal::Arg;
 #ifndef FMT_THROW
 # if FMT_EXCEPTIONS
 #  define FMT_THROW(x) throw x
-#  define FMT_RETURNAFTERTHROW(x)
+#  define FMT_RETURN_AFTER_THROW(x)
 # else
 #  define FMT_THROW(x) assert(false)
-#  define FMT_RETURNAFTERTHROW(x) return x
+#  define FMT_RETURN_AFTER_THROW(x) return x
 # endif
 #endif
 
@@ -253,7 +253,7 @@ class WidthHandler : public fmt::internal::ArgVisitor<WidthHandler, unsigned> {
 
   unsigned visit_unhandled_arg() {
     FMT_THROW(fmt::FormatError("width is not integer"));
-    FMT_RETURNAFTERTHROW(0);
+    FMT_RETURN_AFTER_THROW(0);
   }
 
   template <typename T>
@@ -275,7 +275,7 @@ class PrecisionHandler :
  public:
   unsigned visit_unhandled_arg() {
     FMT_THROW(fmt::FormatError("precision is not integer"));
-    FMT_RETURNAFTERTHROW(0);
+    FMT_RETURN_AFTER_THROW(0);
   }
 
   template <typename T>
@@ -627,7 +627,8 @@ void fmt::BasicWriter<Char>::write_str(
     if (*str_value)
       str_size = std::char_traits<StrChar>::length(str_value);
   }
-  if (spec.precision_ >= 0 && static_cast<std::size_t>(spec.precision_) < str_size)
+  std::size_t precision = spec.precision_;
+  if (spec.precision_ >= 0 && precision < str_size)
     str_size = spec.precision_;
   write_str(str_value, str_size, spec);
 }
