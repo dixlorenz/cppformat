@@ -25,6 +25,8 @@
  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "DLStdInclude.h"
+
 #include "format.h"
 
 #include <string.h>
