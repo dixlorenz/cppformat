@@ -120,12 +120,6 @@
 # define FMT_NOEXCEPT(expr)
 #endif
 
-#if FMT_HAS_CPP_ATTRIBUTE(clang::fallthrough)
-# define FMT_FALLTHROUGH [[clang::fallthrough]]
-#else
-# define FMT_FALLTHROUGH
-#endif
-
 // A macro to disallow the copy constructor and operator= functions
 // This should be used in the private: declarations for a class
 #define FMT_DISALLOW_COPY_AND_ASSIGN(TypeName) \
@@ -881,7 +875,7 @@ class ArgVisitor {
     switch (arg.type) {
     default:
       assert(false);
-      FMT_FALLTHROUGH;
+      return Result();
     case Arg::INT:
       return FMT_DISPATCH(visit_int(arg.int_value));
     case Arg::UINT:
@@ -1428,6 +1422,8 @@ class SystemError : public internal::RuntimeError {
    where *<message>* is the formatted message and *<system-message>* is
    the system message corresponding to the error code.
    *error_code* is a system error code as given by ``errno``.
+   If *error_code* is not a valid error code such as -1, the system message
+   may look like "Unknown error -1" and is platform-dependent.
    
    **Example**::
 
@@ -2110,9 +2106,7 @@ void report_system_error(int error_code, StringRef message) FMT_NOEXCEPT(true);
 
 #ifdef _WIN32
 
-/**
- A Windows error.
-*/
+/** A Windows error. */
 class WindowsError : public SystemError {
  private:
   void init(int error_code, StringRef format_str, ArgList args);
@@ -2128,7 +2122,9 @@ class WindowsError : public SystemError {
    where *<message>* is the formatted message and *<system-message>* is the system
    message corresponding to the error code.
    *error_code* is a Windows error code as given by ``GetLastError``.
-   
+   If *error_code* is not a valid error code such as -1, the system message
+   will look like "error -1".
+
    **Example**::
 
      // This throws a WindowsError with the description
