@@ -44,6 +44,38 @@
 # include <iterator>
 #endif
 
+#ifdef _MSC_VER
+# include <intrin.h>  // _BitScanReverse, _BitScanReverse64
+
+namespace fmt {
+namespace internal {
+# pragma intrinsic(_BitScanReverse)
+inline uint32_t clz(uint32_t x) {
+  unsigned long r = 0;
+  _BitScanReverse(&r, x);
+  return 31 - r;
+}
+# define FMT_BUILTIN_CLZ(n) fmt::internal::clz(n)
+inline uint32_t clzll(uint64_t x) {
+  unsigned long r = 0;
+# ifdef _WIN64
+#  pragma intrinsic(_BitScanReverse64)
+  _BitScanReverse64(&r, x);
+# else
+  // Scan the high 32 bits.
+  if (_BitScanReverse(&r, static_cast<uint32_t>(x >> 32)))
+    return 63 - (r + 32);
+
+  // Scan the low 32 bits.
+  _BitScanReverse(&r, static_cast<uint32_t>(x));
+# endif
+  return 63 - r;
+}
+# define FMT_BUILTIN_CLZLL(n) fmt::internal::clzll(n)
+}
+}
+#endif
+
 #ifdef __GNUC__
 # define FMT_GCC_VERSION (__GNUC__ * 100 + __GNUC_MINOR__)
 # define FMT_GCC_EXTENSION __extension__
@@ -55,6 +87,9 @@
 // Disable the warning about declaration shadowing because it affects too
 // many valid cases.
 #  pragma GCC diagnostic ignored "-Wshadow"
+# endif
+# if __cplusplus >= 201103L || defined __GXX_EXPERIMENTAL_CXX0X__
+#  define FMT_HAS_GXX_CXX11 1
 # endif
 #else
 # define FMT_GCC_EXTENSION
@@ -93,7 +128,7 @@
 // since version 2013.
 # define FMT_USE_VARIADIC_TEMPLATES \
    (FMT_HAS_FEATURE(cxx_variadic_templates) || \
-       (FMT_GCC_VERSION >= 404 && __cplusplus >= 201103) || _MSC_VER >= 1800)
+       (FMT_GCC_VERSION >= 404 && FMT_HAS_GXX_CXX11) || _MSC_VER >= 1800)
 #endif
 
 #ifndef FMT_USE_RVALUE_REFERENCES
@@ -104,7 +139,7 @@
 # else
 #  define FMT_USE_RVALUE_REFERENCES \
     (FMT_HAS_FEATURE(cxx_rvalue_references) || \
-        (FMT_GCC_VERSION >= 403 && __cplusplus >= 201103) || _MSC_VER >= 1600)
+        (FMT_GCC_VERSION >= 403 && FMT_HAS_GXX_CXX11) || _MSC_VER >= 1600)
 # endif
 #endif
 
@@ -114,17 +149,24 @@
 
 // Define FMT_USE_NOEXCEPT to make C++ Format use noexcept (C++11 feature).
 #if FMT_USE_NOEXCEPT || FMT_HAS_FEATURE(cxx_noexcept) || \
-  (FMT_GCC_VERSION >= 408 && __cplusplus >= 201103)
-# define FMT_NOEXCEPT(expr) noexcept(expr)
+  (FMT_GCC_VERSION >= 408 && FMT_HAS_GXX_CXX11)
+# define FMT_NOEXCEPT noexcept
 #else
-# define FMT_NOEXCEPT(expr)
+# define FMT_NOEXCEPT throw()
 #endif
 
 // A macro to disallow the copy constructor and operator= functions
 // This should be used in the private: declarations for a class
-#define FMT_DISALLOW_COPY_AND_ASSIGN(TypeName) \
-  TypeName(const TypeName&); \
-  void operator=(const TypeName&)
+#if FMT_USE_DELETED_FUNCTIONS || FMT_HAS_FEATURE(cxx_deleted_functions) || \
+  (FMT_GCC_VERSION >= 404 && FMT_HAS_GXX_CXX11) || _MSC_VER >= 1800
+# define FMT_DISALLOW_COPY_AND_ASSIGN(TypeName) \
+    TypeName(const TypeName&) = delete; \
+    TypeName& operator=(const TypeName&) = delete
+#else
+# define FMT_DISALLOW_COPY_AND_ASSIGN(TypeName) \
+    TypeName(const TypeName&); \
+    TypeName& operator=(const TypeName&)
+#endif
 
 namespace fmt {
 
@@ -231,7 +273,7 @@ typedef BasicStringRef<wchar_t> WStringRef;
   A formatting error such as invalid format string.
 */
 class FormatError : public std::runtime_error {
-public:
+ public:
   explicit FormatError(StringRef message)
   : std::runtime_error(message.c_str()) {}
 };
@@ -291,7 +333,7 @@ class Buffer {
       grow(capacity);
   }
 
-  void clear() FMT_NOEXCEPT(true) { size_ = 0; }
+  void clear() FMT_NOEXCEPT { size_ = 0; }
 
   void push_back(const T &value) {
     if (size_ == capacity_)
@@ -530,22 +572,23 @@ struct BasicData {
 
 typedef BasicData<> Data;
 
+#if FMT_GCC_VERSION >= 400 || FMT_HAS_BUILTIN(__builtin_clz)
+# define FMT_BUILTIN_CLZ(n) __builtin_clz(n)
+#endif
+
 #if FMT_GCC_VERSION >= 400 || FMT_HAS_BUILTIN(__builtin_clzll)
+# define FMT_BUILTIN_CLZLL(n) __builtin_clzll(n)
+#endif
+
+#ifdef FMT_BUILTIN_CLZLL
 // Returns the number of decimal digits in n. Leading zeros are not counted
 // except for n == 0 in which case count_digits returns 1.
 inline unsigned count_digits(uint64_t n) {
   // Based on http://graphics.stanford.edu/~seander/bithacks.html#IntegerLog10
   // and the benchmark https://github.com/localvoid/cxx-benchmark-count-digits.
-  unsigned t = (64 - __builtin_clzll(n | 1)) * 1233 >> 12;
+  unsigned t = (64 - FMT_BUILTIN_CLZLL(n | 1)) * 1233 >> 12;
   return t - (n < Data::POWERS_OF_10_64[t]) + 1;
 }
-# if FMT_GCC_VERSION >= 400 || FMT_HAS_BUILTIN(__builtin_clz)
-// Optional version of count_digits for better performance on 32-bit platforms.
-inline unsigned count_digits(uint32_t n) {
-  uint32_t t = (32 - __builtin_clz(n | 1)) * 1233 >> 12;
-  return t - (n < Data::POWERS_OF_10_32[t]) + 1;
-}
-# endif
 #else
 // Fallback version of count_digits used when __builtin_clz is not available.
 inline unsigned count_digits(uint64_t n) {
@@ -561,6 +604,14 @@ inline unsigned count_digits(uint64_t n) {
     n /= 10000u;
     count += 4;
   }
+}
+#endif
+
+#ifdef FMT_BUILTIN_CLZ
+// Optional version of count_digits for better performance on 32-bit platforms.
+inline unsigned count_digits(uint32_t n) {
+  uint32_t t = (32 - FMT_BUILTIN_CLZ(n | 1)) * 1233 >> 12;
+  return t - (n < Data::POWERS_OF_10_32[t]) + 1;
 }
 #endif
 
@@ -624,11 +675,11 @@ class UTF16ToUTF8 {
 #endif
 
 void format_system_error(fmt::Writer &out, int error_code,
-                         fmt::StringRef message) FMT_NOEXCEPT(true);
+                         fmt::StringRef message) FMT_NOEXCEPT;
 
 #ifdef _WIN32
 void format_windows_error(fmt::Writer &out, int error_code,
-                          fmt::StringRef message) FMT_NOEXCEPT(true);
+                          fmt::StringRef message) FMT_NOEXCEPT;
 #endif
 
 // Computes max(Arg, 1) at compile time. It is used to avoid errors about
@@ -722,7 +773,7 @@ class MakeValue : public Value {
            *static_cast<const T*>(arg));
   }
 
-public:
+ public:
   MakeValue() {}
 
 #define FMT_MAKE_VALUE(Type, field, TYPE) \
@@ -1346,6 +1397,7 @@ inline uint64_t make_type(FMT_GEN15(FMT_ARG_TYPE_DEFAULT)) {
 
 // Emulates a variadic function returning void on a pre-C++11 compiler.
 # define FMT_VARIADIC_VOID(func, arg_type) \
+  inline void func(arg_type arg) { func(arg, fmt::ArgList()); } \
   FMT_WRAP1(func, arg_type, 1) FMT_WRAP1(func, arg_type, 2) \
   FMT_WRAP1(func, arg_type, 3) FMT_WRAP1(func, arg_type, 4) \
   FMT_WRAP1(func, arg_type, 5) FMT_WRAP1(func, arg_type, 6) \
@@ -1419,6 +1471,7 @@ class SystemError : public internal::RuntimeError {
 
    .. parsed-literal::
      *<message>*: *<system-message>*
+
    where *<message>* is the formatted message and *<system-message>* is
    the system message corresponding to the error code.
    *error_code* is a system error code as given by ``errno``.
@@ -1561,7 +1614,7 @@ class BasicWriter {
     Returns a pointer to the output buffer content. No terminating null
     character is appended.
    */
-  const Char *data() const FMT_NOEXCEPT(true) { return &buffer_[0]; }
+  const Char *data() const FMT_NOEXCEPT { return &buffer_[0]; }
 
   /**
     Returns a pointer to the output buffer content with terminating null
@@ -1600,8 +1653,8 @@ class BasicWriter {
        Current point:
        (-3.140000, +3.140000)
 
-    The output can be accessed using :meth:`data`, :meth:`c_str` or :meth:`str`
-    methods.
+    The output can be accessed using :func:`data()`, :func:`c_str` or
+    :func:`str` methods.
 
     See also :ref:`syntax`.
     \endrst
@@ -1685,7 +1738,7 @@ class BasicWriter {
     return *this;
   }
 
-  void clear() FMT_NOEXCEPT(true) { buffer_.clear(); }
+  void clear() FMT_NOEXCEPT { buffer_.clear(); }
 };
 
 template <typename Char>
@@ -2102,7 +2155,7 @@ void format(BasicFormatter<Char> &f, const Char *&format_str, const T &value) {
 
 // Reports a system error without throwing an exception.
 // Can be used to report errors from destructors.
-void report_system_error(int error_code, StringRef message) FMT_NOEXCEPT(true);
+void report_system_error(int error_code, StringRef message) FMT_NOEXCEPT;
 
 #ifdef _WIN32
 
@@ -2119,6 +2172,7 @@ class WindowsError : public SystemError {
 
    .. parsed-literal::
      *<message>*: *<system-message>*
+
    where *<message>* is the formatted message and *<system-message>* is the system
    message corresponding to the error code.
    *error_code* is a Windows error code as given by ``GetLastError``.
@@ -2145,7 +2199,7 @@ class WindowsError : public SystemError {
 
 // Reports a Windows error without throwing an exception.
 // Can be used to report errors from destructors.
-void report_windows_error(int error_code, StringRef message) FMT_NOEXCEPT(true);
+void report_windows_error(int error_code, StringRef message) FMT_NOEXCEPT;
 
 #endif
 

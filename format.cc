@@ -121,20 +121,7 @@ struct IntChecker<true> {
   }
 };
 
-#ifdef _WIN32
-const uint8_t WIN32_COLORS[] = {
-  0,
-  FOREGROUND_RED | FOREGROUND_INTENSITY,
-  FOREGROUND_GREEN | FOREGROUND_INTENSITY,
-  FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_INTENSITY,
-  FOREGROUND_BLUE | FOREGROUND_INTENSITY,
-  FOREGROUND_BLUE | FOREGROUND_RED | FOREGROUND_INTENSITY,
-  FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY,
-  FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY
-};
-#else
 const char RESET_COLOR[] = "\x1b[0m";
-#endif
 
 typedef void (*FormatFunc)(fmt::Writer &, int, fmt::StringRef);
 
@@ -148,7 +135,7 @@ typedef void (*FormatFunc)(fmt::Writer &, int, fmt::StringRef);
 //   other  - failure
 // Buffer should be at least of size 1.
 int safe_strerror(
-    int error_code, char *&buffer, std::size_t buffer_size) FMT_NOEXCEPT(true) {
+    int error_code, char *&buffer, std::size_t buffer_size) FMT_NOEXCEPT {
   assert(buffer != 0 && buffer_size != 0);
   int result = 0;
 #if ((_POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600) && !_GNU_SOURCE) || __ANDROID__
@@ -182,7 +169,7 @@ int safe_strerror(
 }
 
 void format_error_code(fmt::Writer &out, int error_code,
-                       fmt::StringRef message) FMT_NOEXCEPT(true) {
+                       fmt::StringRef message) FMT_NOEXCEPT {
   // Report error code making sure that the output fits into
   // INLINE_BUFFER_SIZE to avoid dynamic memory allocation and potential
   // bad_alloc.
@@ -200,7 +187,7 @@ void format_error_code(fmt::Writer &out, int error_code,
 }
 
 void report_error(FormatFunc func,
-    int error_code, fmt::StringRef message) FMT_NOEXCEPT(true) {
+    int error_code, fmt::StringRef message) FMT_NOEXCEPT {
   fmt::MemoryWriter full_message;
   func(full_message, error_code, message);
   // Use Writer::data instead of Writer::c_str to avoid potential memory
@@ -490,10 +477,10 @@ FMT_FUNC int fmt::internal::UTF16ToUTF8::convert(fmt::WStringRef s) {
 }
 
 FMT_FUNC void fmt::WindowsError::init(
-    int error_code, StringRef format_str, ArgList args) {
-  error_code_ = error_code;
+    int err_code, StringRef format_str, ArgList args) {
+  error_code_ = err_code;
   MemoryWriter w;
-  internal::format_windows_error(w, error_code, format(format_str, args));
+  internal::format_windows_error(w, err_code, format(format_str, args));
   std::runtime_error &base = *this;
   base = std::runtime_error(w.str());
 }
@@ -502,7 +489,7 @@ FMT_FUNC void fmt::WindowsError::init(
 
 FMT_FUNC void fmt::internal::format_system_error(
     fmt::Writer &out, int error_code,
-    fmt::StringRef message) FMT_NOEXCEPT(true) {
+    fmt::StringRef message) FMT_NOEXCEPT {
   FMT_TRY {
     MemoryBuffer<char, INLINE_BUFFER_SIZE> buffer;
     buffer.resize(INLINE_BUFFER_SIZE);
@@ -524,7 +511,7 @@ FMT_FUNC void fmt::internal::format_system_error(
 #ifdef _WIN32
 FMT_FUNC void fmt::internal::format_windows_error(
     fmt::Writer &out, int error_code,
-    fmt::StringRef message) FMT_NOEXCEPT(true) {
+    fmt::StringRef message) FMT_NOEXCEPT {
   class String {
    private:
     LPWSTR str_;
@@ -1085,13 +1072,13 @@ void fmt::BasicFormatter<Char>::format(
 }
 
 FMT_FUNC void fmt::report_system_error(
-    int error_code, fmt::StringRef message) FMT_NOEXCEPT(true) {
+    int error_code, fmt::StringRef message) FMT_NOEXCEPT {
   report_error(internal::format_system_error, error_code, message);
 }
 
 #ifdef _WIN32
 FMT_FUNC void fmt::report_windows_error(
-    int error_code, fmt::StringRef message) FMT_NOEXCEPT(true) {
+    int error_code, fmt::StringRef message) FMT_NOEXCEPT {
   report_error(internal::format_windows_error, error_code, message);
 }
 #endif
@@ -1113,27 +1100,11 @@ FMT_FUNC void fmt::print(std::ostream &os, StringRef format_str, ArgList args) {
 }
 
 FMT_FUNC void fmt::print_colored(Color c, StringRef format, ArgList args) {
-#ifdef _WIN32
-  HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-  if (handle == INVALID_HANDLE_VALUE)
-    FMT_THROW(WindowsError(GetLastError(), "cannot get output handle"));
-  CONSOLE_SCREEN_BUFFER_INFO info_con;
-  if (!GetConsoleScreenBufferInfo(handle, &info_con))
-    FMT_THROW(WindowsError(GetLastError(), "cannot get console information"));
-  WORD reset_color = info_con.wAttributes;
-  WORD color = static_cast<int>(c) >= ARRAYSIZE(WIN32_COLORS) ? reset_color : WIN32_COLORS[c];
-  if (!SetConsoleTextAttribute(handle, color))
-    FMT_THROW(WindowsError(GetLastError(), "cannot set console color"));
-  print(format, args);
-  if (!SetConsoleTextAttribute(handle, reset_color))
-    FMT_THROW(WindowsError(GetLastError(), "cannot set console color"));
-#else
   char escape[] = "\x1b[30m";
   escape[3] = '0' + static_cast<char>(c);
   std::fputs(escape, stdout);
   print(format, args);
   std::fputs(RESET_COLOR, stdout);
-#endif
 }
 
 FMT_FUNC int fmt::fprintf(std::FILE *f, StringRef format, ArgList args) {

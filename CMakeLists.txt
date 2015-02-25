@@ -1,3 +1,5 @@
+message(STATUS "CMake version: ${CMAKE_VERSION}")
+
 cmake_minimum_required(VERSION 2.6)
 
 # Set the default CMAKE_BUILD_TYPE to Release.
@@ -26,7 +28,7 @@ else ()
 endif ()
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}
-  "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+  "${CMAKE_CURRENT_SOURCE_DIR}/support/cmake")
 
 if (CMAKE_GENERATOR MATCHES "Visual Studio")
   # If Microsoft SDK is installed create script run-msbuild.bat that
@@ -59,6 +61,11 @@ endif ()
 
 if (CPP11_FLAG)
   set(CMAKE_REQUIRED_FLAGS ${CPP11_FLAG})
+endif ()
+
+if (BIICODE)
+  include(biicode/cmake/biicode.cmake)
+  return()
 endif ()
 
 add_library(format ${FMT_SOURCES})
@@ -96,8 +103,35 @@ if (NOT FMT_VARIADIC_TEMPLATES)
   add_definitions(-DGTEST_LANG_CXX11=0)
 endif ()
 
+# This is disabled at the moment because format is compiled without -std=c++11
+# by default.
+#check_cxx_source_compiles("
+#  void f() noexcept {}
+#  int main(){ f(); }" FMT_BASIC_NOEXCEPT_SUPPORT)
+#if (FMT_BASIC_NOEXCEPT_SUPPORT)
+#  add_definitions(-DFMT_USE_NOEXCEPT=1)
+#endif ()
+
+#check_cxx_source_compiles("
+#  struct C{
+#    C()=delete;
+#    C(const C&)=delete;
+#    C& operator=(const C&)=delete;
+#  };
+#  int main(){}" FMT_DELETED_FUNCTIONS)
+#if (FMT_DELETED_FUNCTIONS)
+#  add_definitions(-DFMT_USE_DELETED_FUNCTIONS=1)
+#endif ()
+
+#check_cxx_source_compiles("
+#  static_assert(true, \"\");
+#  int main(){}" FMT_STATIC_ASSERT)
+#if (FMT_STATIC_ASSERT)
+#  add_definitions(-DFMT_USE_STATIC_ASSERT=1)
+#endif ()
+
 # GTest doesn't detect <tuple> with clang.
-if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   target_compile_definitions(gmock PUBLIC GTEST_USE_OWN_TR1_TUPLE=1)
 endif ()
 
@@ -126,3 +160,7 @@ if (EXISTS .gitignore)
   set(CPACK_RESOURCE_FILE_README ${FORMAT_SOURCE_DIR}/README.rst)
   include(CPack)
 endif ()
+
+# Install our targets
+install(TARGETS format DESTINATION lib)
+install(FILES format.h DESTINATION include)
