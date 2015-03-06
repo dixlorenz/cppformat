@@ -1,7 +1,7 @@
 /*
  A C++ interface to POSIX functions.
 
- Copyright (c) 2014, Victor Zverovich
+ Copyright (c) 2014 - 2015, Victor Zverovich
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -69,7 +69,7 @@
 #endif
 
 #if FMT_USE_STATIC_ASSERT || FMT_HAS_CPP_ATTRIBUTE(cxx_static_assert) || \
-  (FMT_GCC_VERSION >= 403 && FMT_HAS_GXX_CXX11) ||  _MSC_VER >= 1600 
+  (FMT_GCC_VERSION >= 403 && FMT_HAS_GXX_CXX11) || _MSC_VER >= 1600
 # define FMT_STATIC_ASSERT(cond, message) static_assert(cond, message)
 #else
 # define FMT_CONCAT_(a, b) FMT_CONCAT(a, b)

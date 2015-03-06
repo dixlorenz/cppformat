@@ -16,6 +16,8 @@ project(FORMAT)
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
 include(CheckCXXCompilerFlag)
 check_cxx_compiler_flag(-std=c++11 HAVE_STD_CPP11_FLAG)
 if (HAVE_STD_CPP11_FLAG)
@@ -64,7 +66,7 @@ if (CPP11_FLAG)
 endif ()
 
 if (BIICODE)
-  include(biicode/cmake/biicode.cmake)
+  include(support/cmake/biicode.cmake)
   return()
 endif ()
 
@@ -99,7 +101,13 @@ check_cxx_source_compiles("
   template <class T, class ...Types>
   struct S { typedef typename S<Types...>::type type; };
   int main() {}" FMT_VARIADIC_TEMPLATES)
-if (NOT FMT_VARIADIC_TEMPLATES)
+
+# Check if initializer lists are supported.
+check_cxx_source_compiles("
+  #include <initilizer_list>
+  int main() {}" FMT_INITIALIZER_LIST)
+  
+if (NOT FMT_VARIADIC_TEMPLATES OR NOT FMT_INITIALIZER_LIST)
   add_definitions(-DGTEST_LANG_CXX11=0)
 endif ()
 
@@ -152,8 +160,8 @@ if (EXISTS .gitignore)
   set(CPACK_SOURCE_GENERATOR ZIP)
   set(CPACK_SOURCE_IGNORE_FILES ${ignored_files})
   set(CPACK_PACKAGE_VERSION_MAJOR 1)
-  set(CPACK_PACKAGE_VERSION_MINOR 0)
-  set(CPACK_PACKAGE_VERSION_PATCH 1)
+  set(CPACK_PACKAGE_VERSION_MINOR 1)
+  set(CPACK_PACKAGE_VERSION_PATCH 0)
   set(CPPFORMAT_VERSION
     ${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH})
   set(CPACK_SOURCE_PACKAGE_FILE_NAME cppformat-${CPPFORMAT_VERSION})

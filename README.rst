@@ -30,6 +30,9 @@ Features
   <http://cppformat.readthedocs.org/en/latest/syntax.html>`_
   similar to the one used by `str.format
   <http://docs.python.org/2/library/stdtypes.html#str.format>`_ in Python.
+* Safe `printf implementation
+  <http://cppformat.readthedocs.org/en/stable/reference.html#printf-formatting-functions>`_
+  including the POSIX extension for positional arguments.
 * Support for user-defined types.
 * High speed: performance of the format API is close to that of
   glibc's `printf <http://en.cppreference.com/w/cpp/io/c/fprintf>`_
@@ -252,6 +255,15 @@ on integer formatting than ``fmt::Writer`` on Karma's own benchmark,
 see `Fast integer to string conversion in C++
 <http://zverovich.net/2013/09/07/integer-to-string-conversion-in-cplusplus.html>`_.
 
+What Users Say
+--------------
+
+  Thanks for creating this library. It’s been a hole in C++ for a long time.
+  I’ve used both boost::format and loki::SPrintf, and neither felt like the
+  right answer. This does.
+
+  -- Kurt Haas
+
 Benchmarks
 ----------
 
@@ -357,7 +369,7 @@ or the bloat test::
 License
 -------
 
-Copyright (c) 2012, Victor Zverovich
+Copyright (c) 2012 - 2015, Victor Zverovich
 
 All rights reserved.
 

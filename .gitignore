@@ -1,11 +1,9 @@
+/bin
 /_CPack_Packages
-/doc/conf.py
 /doc/doxyxml
 /doc/html
 /Testing
-/*-test
 /install_manifest.txt
-/tinyformat_speed_test
 *~
 *.a
 *.zip

@@ -1,7 +1,7 @@
 /*
  Formatting library for C++
 
- Copyright (c) 2012 - 2014, Victor Zverovich
+ Copyright (c) 2012 - 2015, Victor Zverovich
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -56,10 +56,14 @@ inline uint32_t clz(uint32_t x) {
   return 31 - r;
 }
 # define FMT_BUILTIN_CLZ(n) fmt::internal::clz(n)
+
+# ifdef _WIN64
+#  pragma intrinsic(_BitScanReverse64)
+# endif
+
 inline uint32_t clzll(uint64_t x) {
   unsigned long r = 0;
 # ifdef _WIN64
-#  pragma intrinsic(_BitScanReverse64)
   _BitScanReverse64(&r, x);
 # else
   // Scan the high 32 bits.
@@ -96,8 +100,7 @@ inline uint32_t clzll(uint64_t x) {
 #endif
 
 #ifdef __clang__
-# pragma clang diagnostic ignored "-Wdocumentation-unknown-command"
-# pragma clang diagnostic ignored "-Wimplicit-fallthrough"
+# pragma clang diagnostic ignored "-Wdocumentation"
 #endif
 
 #ifdef __GNUC_LIBSTD__
@@ -433,6 +436,17 @@ void MemoryBuffer<T, SIZE, Allocator>::grow(std::size_t size) {
     this->deallocate(old_ptr, old_capacity);
 }
 
+// A fixed-size buffer.
+template <typename Char>
+class FixedBuffer : public fmt::internal::Buffer<Char> {
+ public:
+  FixedBuffer(Char *array, std::size_t size)
+    : fmt::internal::Buffer<Char>(array, size) {}
+
+ protected:
+  void grow(std::size_t size);
+};
+
 #ifndef _MSC_VER
 // Portable version of signbit.
 inline int getsign(double x) {
@@ -486,8 +500,6 @@ class CharTraits<char> : public BasicCharTraits<char> {
   static char convert(wchar_t);
 
 public:
-  typedef const wchar_t *UnsupportedStrType;
-
   static char convert(char value) { return value; }
 
   // Formats a floating-point number.
@@ -499,8 +511,6 @@ public:
 template <>
 class CharTraits<wchar_t> : public BasicCharTraits<wchar_t> {
  public:
-  typedef const char *UnsupportedStrType;
-
   static wchar_t convert(char value) { return value; }
   static wchar_t convert(wchar_t value) { return value; }
 
@@ -739,6 +749,23 @@ struct Arg : Value {
   Type type;
 };
 
+template <typename T>
+struct None {};
+
+// A helper class template to enable or disable overloads taking wide
+// characters and strings in MakeValue.
+template <typename T, typename Char>
+struct WCharHelper {
+  typedef None<T> Supported;
+  typedef T Unsupported;
+};
+
+template <typename T>
+struct WCharHelper<T, wchar_t> {
+  typedef T Supported;
+  typedef None<T> Unsupported;
+};
+
 // Makes a Value object from any type.
 template <typename Char>
 class MakeValue : public Value {
@@ -753,13 +780,22 @@ class MakeValue : public Value {
   template <typename T>
   MakeValue(T *value);
 
+  // The following methods are private to disallow formatting of wide
+  // characters and strings into narrow strings as in
+  //   fmt::format("{}", L"test");
+  // To fix this, use a wide format string: fmt::format(L"{}", L"test").
+  MakeValue(typename WCharHelper<wchar_t, Char>::Unsupported);
+  MakeValue(typename WCharHelper<wchar_t *, Char>::Unsupported);
+  MakeValue(typename WCharHelper<const wchar_t *, Char>::Unsupported);
+  MakeValue(typename WCharHelper<const std::wstring &, Char>::Unsupported);
+  MakeValue(typename WCharHelper<WStringRef, Char>::Unsupported);
+
   void set_string(StringRef str) {
     string.value = str.c_str();
     string.size = str.size();
   }
 
   void set_string(WStringRef str) {
-    CharTraits<Char>::convert(wchar_t());
     wstring.value = str.c_str();
     wstring.size = str.size();
   }
@@ -818,8 +854,8 @@ class MakeValue : public Value {
   FMT_MAKE_VALUE(unsigned char, int_value, CHAR)
   FMT_MAKE_VALUE(char, int_value, CHAR)
 
-  MakeValue(wchar_t value) {
-    int_value = internal::CharTraits<Char>::convert(value);
+  MakeValue(typename WCharHelper<wchar_t, Char>::Supported value) {
+    int_value = value;
   }
   static uint64_t type(wchar_t) { return Arg::CHAR; }
 
@@ -834,10 +870,16 @@ class MakeValue : public Value {
   FMT_MAKE_STR_VALUE(const std::string &, STRING)
   FMT_MAKE_STR_VALUE(StringRef, STRING)
 
-  FMT_MAKE_STR_VALUE(wchar_t *, WSTRING)
-  FMT_MAKE_STR_VALUE(const wchar_t *, WSTRING)
-  FMT_MAKE_STR_VALUE(const std::wstring &, WSTRING)
-  FMT_MAKE_STR_VALUE(WStringRef, WSTRING)
+#define FMT_MAKE_WSTR_VALUE(Type, TYPE) \
+  MakeValue(typename WCharHelper<Type, Char>::Supported value) { \
+    set_string(value); \
+  } \
+  static uint64_t type(Type) { return Arg::TYPE; }
+
+  FMT_MAKE_WSTR_VALUE(wchar_t *, WSTRING)
+  FMT_MAKE_WSTR_VALUE(const wchar_t *, WSTRING)
+  FMT_MAKE_WSTR_VALUE(const std::wstring &, WSTRING)
+  FMT_MAKE_WSTR_VALUE(WStringRef, WSTRING)
 
   FMT_MAKE_VALUE(void *, pointer, POINTER)
   FMT_MAKE_VALUE(const void *, pointer, POINTER)
@@ -1575,11 +1617,13 @@ class BasicWriter {
   void write_str(
       const internal::Arg::StringValue<StrChar> &str, const FormatSpec &spec);
 
-  // This method is private to disallow writing a wide string to a
-  // char stream and vice versa. If you want to print a wide string
-  // as a pointer as std::ostream does, cast it to const void*.
+  // This following methods are private to disallow writing wide characters
+  // and strings to a char stream. If you want to print a wide string as a
+  // pointer as std::ostream does, cast it to const void*.
   // Do not implement!
-  void operator<<(typename internal::CharTraits<Char>::UnsupportedStrType);
+  void operator<<(typename internal::WCharHelper<wchar_t, Char>::Unsupported);
+  void operator<<(
+      typename internal::WCharHelper<const wchar_t *, Char>::Unsupported);
 
   // Appends floating-point length specifier to the format string.
   // The second argument is only used for overload resolution.
@@ -1709,8 +1753,9 @@ class BasicWriter {
     return *this;
   }
 
-  BasicWriter &operator<<(wchar_t value) {
-    buffer_.push_back(internal::CharTraits<Char>::convert(value));
+  BasicWriter &operator<<(
+      typename internal::WCharHelper<wchar_t, Char>::Supported value) {
+    buffer_.push_back(value);
     return *this;
   }
 
@@ -2077,20 +2122,20 @@ void BasicWriter<Char>::write_double(
 
 /**
   \rst
-  This template provides operations for formatting and writing data into
-  a character stream. The output is stored in a memory buffer that grows
+  This class template provides operations for formatting and writing data
+  into a character stream. The output is stored in a memory buffer that grows
   dynamically.
 
   You can use one of the following typedefs for common character types
   and the standard allocator:
 
-  +---------------+-----------------------------------------------+
-  | Type          | Definition                                    |
-  +===============+===============================================+
-  | MemoryWriter  | BasicWriter<char, std::allocator<char>>       |
-  +---------------+-----------------------------------------------+
-  | WMemoryWriter | BasicWriter<wchar_t, std::allocator<wchar_t>> |
-  +---------------+-----------------------------------------------+
+  +---------------+-----------------------------------------------------+
+  | Type          | Definition                                          |
+  +===============+=====================================================+
+  | MemoryWriter  | BasicMemoryWriter<char, std::allocator<char>>       |
+  +---------------+-----------------------------------------------------+
+  | WMemoryWriter | BasicMemoryWriter<wchar_t, std::allocator<wchar_t>> |
+  +---------------+-----------------------------------------------------+
 
   **Example**::
 
@@ -2120,15 +2165,19 @@ class BasicMemoryWriter : public BasicWriter<Char> {
 
 #if FMT_USE_RVALUE_REFERENCES
   /**
+    \rst
     Constructs a :class:`fmt::BasicMemoryWriter` object moving the content
     of the other object to it.
+    \endrst
    */
   BasicMemoryWriter(BasicMemoryWriter &&other)
     : BasicWriter<Char>(buffer_), buffer_(std::move(other.buffer_)) {
   }
 
   /**
+    \rst
     Moves the content of the other ``BasicMemoryWriter`` object to this one.
+    \endrst
    */
   BasicMemoryWriter &operator=(BasicMemoryWriter &&other) {
     buffer_ = std::move(other.buffer_);
@@ -2140,6 +2189,56 @@ class BasicMemoryWriter : public BasicWriter<Char> {
 typedef BasicMemoryWriter<char> MemoryWriter;
 typedef BasicMemoryWriter<wchar_t> WMemoryWriter;
 
+/**
+  \rst
+  This class template provides operations for formatting and writing data
+  into a fixed-size array. For writing into a dynamically growing buffer
+  use :class:`fmt::BasicMemoryWriter`.
+  
+  Any write method will throw ``std::runtime_error`` if the output doesn't fit
+  into the array.
+
+  You can use one of the following typedefs for common character types:
+
+  +--------------+---------------------------+
+  | Type         | Definition                |
+  +==============+===========================+
+  | ArrayWriter  | BasicArrayWriter<char>    |
+  +--------------+---------------------------+
+  | WArrayWriter | BasicArrayWriter<wchar_t> |
+  +--------------+---------------------------+
+  \endrst
+ */
+template <typename Char>
+class BasicArrayWriter : public BasicWriter<Char> {
+ private:
+  internal::FixedBuffer<Char> buffer_;
+
+ public:
+  /**
+   \rst
+   Constructs a :class:`fmt::BasicArrayWriter` object for *array* of the
+   given size.
+   \endrst
+   */
+  BasicArrayWriter(Char *array, std::size_t size)
+    : BasicWriter<Char>(buffer_), buffer_(array, size) {}
+
+  // FIXME: this is temporary undocumented due to a bug in Sphinx
+  /*
+   \rst
+   Constructs a :class:`fmt::BasicArrayWriter` object for *array* of the
+   size known at compile time.
+   \endrst
+   */
+  template <std::size_t SIZE>
+  explicit BasicArrayWriter(Char (&array)[SIZE])
+    : BasicWriter<Char>(buffer_), buffer_(array, SIZE) {}
+};
+
+typedef BasicArrayWriter<char> ArrayWriter;
+typedef BasicArrayWriter<wchar_t> WArrayWriter;
+
 // Formats a value.
 template <typename Char, typename T>
 void format(BasicFormatter<Char> &f, const Char *&format_str, const T &value) {
@@ -2149,7 +2248,8 @@ void format(BasicFormatter<Char> &f, const Char *&format_str, const T &value) {
   internal::Value &arg_value = arg;
   std::basic_string<Char> str = os.str();
   arg_value = internal::MakeValue<Char>(str);
-  arg.type = static_cast<internal::Arg::Type>(internal::MakeValue<Char>::type(str));
+  arg.type = static_cast<internal::Arg::Type>(
+        internal::MakeValue<Char>::type(str));
   format_str = f.format(format_str, arg);
 }
 
@@ -2173,8 +2273,8 @@ class WindowsError : public SystemError {
    .. parsed-literal::
      *<message>*: *<system-message>*
 
-   where *<message>* is the formatted message and *<system-message>* is the system
-   message corresponding to the error code.
+   where *<message>* is the formatted message and *<system-message>* is the
+   system message corresponding to the error code.
    *error_code* is a Windows error code as given by ``GetLastError``.
    If *error_code* is not a valid error code such as -1, the system message
    will look like "error -1".
@@ -2187,8 +2287,10 @@ class WindowsError : public SystemError {
      const char *filename = "madeup";
      LPOFSTRUCT of = LPOFSTRUCT();
      HFILE file = OpenFile(filename, &of, OF_READ);
-     if (file == HFILE_ERROR)
-       throw fmt::WindowsError(GetLastError(), "cannot open file '{}'", filename);
+     if (file == HFILE_ERROR) {
+       throw fmt::WindowsError(GetLastError(),
+                               "cannot open file '{}'", filename);
+     }
    \endrst
   */
   WindowsError(int error_code, StringRef message) {
