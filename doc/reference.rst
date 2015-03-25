@@ -82,6 +82,10 @@ Utilities
 .. doxygenclass:: fmt::BasicStringRef
    :members:
 
+.. doxygenclass:: fmt::Buffer
+   :protected-members:
+   :members:
+
 System Errors
 =============
 

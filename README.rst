@@ -11,7 +11,7 @@ C++ Format
    :target: http://cppformat.readthedocs.org/en/stable/
    :alt: Documentation Status
    
-.. image:: https://webapi.biicode.com/v1/badges/vitaut/vitaut/cppformat/master
+.. image:: https://webapi.biicode.com/v1/badges/vitaut/vitaut/cppformat/master?dummy
   :target: https://www.biicode.com/vitaut/cppformat
 
 C++ Format is an open-source formatting library for C++.
@@ -152,6 +152,8 @@ Projects using this library
 
 * `spdlog <https://github.com/gabime/spdlog>`_: Super fast C++ logging library
 
+* `TrinityCore <https://github.com/TrinityCore/TrinityCore>`_: Open-source MMORPG framework
+
 `More... <https://github.com/search?q=cppformat&type=Code>`_
 
 If you are aware of other projects using this library, please let me know
@@ -288,7 +290,7 @@ tinyformat 2.0.1  tfm::printf     2.25
 Boost Format 1.54 boost::format   9.94
 ================= ============= ===========
 
-As you can see boost::format is much slower than the alternative methods; this
+As you can see ``boost::format`` is much slower than the alternative methods; this
 is confirmed by `other tests <http://accu.org/index.php/journals/1539>`_.
 Tinyformat is quite good coming close to IOStreams.  Unfortunately tinyformat
 cannot be faster than the IOStreams because it uses them internally.
@@ -425,3 +427,5 @@ formatting. Thanks `Ruslan Baratov <https://github.com/ruslo>`_ for comprehensiv
 `comparison of integer formatting algorithms <https://github.com/ruslo/int-dec-format-tests>`_
 and useful comments regarding performance, `Boris Kaul <https://github.com/localvoid>`_ for
 `C++ counting digits benchmark <https://github.com/localvoid/cxx-benchmark-count-digits>`_.
+Thanks to `CarterLi <https://github.com/CarterLi>`_ for contributing various
+improvements to the code.

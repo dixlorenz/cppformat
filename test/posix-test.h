@@ -39,7 +39,7 @@ struct stat;
 
 namespace test {
 
-#ifndef _WIN32
+#if !defined(_WIN32) || defined(__MINGW32__)
 // Size type for read and write.
 typedef size_t size_t;
 typedef ssize_t ssize_t;
@@ -51,7 +51,7 @@ typedef unsigned size_t;
 typedef int ssize_t;
 errno_t sopen_s(
     int* pfh, const char *filename, int oflag, int shflag, int pmode);
-BOOL GetFileSizeEx(HANDLE hFile, PLARGE_INTEGER lpFileSize);
+DWORD GetFileSize(HANDLE hFile, LPDWORD lpFileSizeHigh);
 #endif
 
 int close(int fildes);
@@ -72,8 +72,7 @@ int pipe(int *pfds, unsigned psize, int textmode);
 
 FILE *fopen(const char *filename, const char *mode);
 int fclose(FILE *stream);
-int fileno(FILE *stream);
-
+int (fileno)(FILE *stream);
 }  // namespace test
 
 #define FMT_SYSTEM(call) test::call

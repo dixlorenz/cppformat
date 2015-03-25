@@ -21,7 +21,16 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 include(CheckCXXCompilerFlag)
 check_cxx_compiler_flag(-std=c++11 HAVE_STD_CPP11_FLAG)
 if (HAVE_STD_CPP11_FLAG)
-  set(CPP11_FLAG -std=c++11)
+  # Check if including cmath works with -std=c++11 and -O3.
+  # It may not in MinGW due to bug http://ehc.ac/p/mingw/bugs/2250/.
+  set(CMAKE_REQUIRED_FLAGS "-std=c++11 -O3")
+  check_cxx_source_compiles("
+    #include <cmath>
+    int main() {}" FMT_CPP11_CMATH)
+  if (FMT_CPP11_CMATH)
+    set(CPP11_FLAG -std=c++11)
+  endif ()
+  set(CMAKE_REQUIRED_FLAGS )
 else ()
   check_cxx_compiler_flag(-std=c++0x HAVE_STD_CPP0X_FLAG)
   if (HAVE_STD_CPP0X_FLAG)
@@ -75,6 +84,11 @@ if (CMAKE_COMPILER_IS_GNUCXX)
   set_target_properties(format PROPERTIES COMPILE_FLAGS
     "-Wall -Wextra -Wshadow -pedantic")
 endif ()
+
+# If FMT_EXTRA_TESTS is TRUE, then test compilation with both -std=c++11
+# and the default flags. Otherwise use only the default flags.
+# The library is distributed in the source form and users have full control
+# over compile options, so the options used here only matter for testing.
 if (CPP11_FLAG AND FMT_EXTRA_TESTS)
   set_target_properties(format PROPERTIES COMPILE_FLAGS ${CPP11_FLAG})
   # Test compilation with default flags.
@@ -104,7 +118,7 @@ check_cxx_source_compiles("
 
 # Check if initializer lists are supported.
 check_cxx_source_compiles("
-  #include <initilizer_list>
+  #include <initializer_list>
   int main() {}" FMT_INITIALIZER_LIST)
   
 if (NOT FMT_VARIADIC_TEMPLATES OR NOT FMT_INITIALIZER_LIST)
