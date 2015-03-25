@@ -90,6 +90,12 @@ using fmt::internal::Arg;
 # pragma warning(disable: 4996)
 #endif
 
+#ifdef __clang__
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wshadow"
+# pragma clang diagnostic ignored "-Wunused-function"
+#endif
+
 // Dummy implementations of strerror_r and strerror_s called if corresponding
 // system functions are not available.
 static inline fmt::internal::None<> strerror_r(int, char *, ...) {
@@ -1210,4 +1216,8 @@ template int fmt::internal::CharTraits<wchar_t>::format_float(
 
 #if _MSC_VER
 # pragma warning(pop)
+#endif
+
+#ifdef __clang__
+# pragma clang diagnostic pop
 #endif
