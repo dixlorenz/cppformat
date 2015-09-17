@@ -2,6 +2,7 @@
 /_CPack_Packages
 /doc/doxyxml
 /doc/html
+/doc/virtualenv
 /Testing
 /install_manifest.txt
 *~
@@ -13,3 +14,4 @@ CTestTestfile.cmake
 CMakeCache.txt
 CMakeFiles
 Makefile
+run-msbuild.bat

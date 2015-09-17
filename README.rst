@@ -2,21 +2,23 @@ C++ Format
 ==========
 
 .. image:: https://travis-ci.org/cppformat/cppformat.png?branch=master
-  :target: https://travis-ci.org/cppformat/cppformat
+   :target: https://travis-ci.org/cppformat/cppformat
 
 .. image:: https://ci.appveyor.com/api/projects/status/qk0bhyhqp1ekpat8
-  :target: https://ci.appveyor.com/project/vitaut/cppformat
-
-.. image:: https://readthedocs.org/projects/cppformat/badge/?version=stable
-   :target: http://cppformat.readthedocs.org/en/stable/
-   :alt: Documentation Status
+   :target: https://ci.appveyor.com/project/vitaut/cppformat
    
 .. image:: https://webapi.biicode.com/v1/badges/vitaut/vitaut/cppformat/master?dummy
-  :target: https://www.biicode.com/vitaut/cppformat
+   :target: https://www.biicode.com/vitaut/cppformat
+
+.. image:: https://badges.gitter.im/Join%20Chat.svg
+   :alt: Join the chat at https://gitter.im/cppformat/cppformat
+   :target: https://gitter.im/cppformat/cppformat?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge
 
 C++ Format is an open-source formatting library for C++.
 It can be used as a safe alternative to printf or as a fast
 alternative to IOStreams.
+
+`Documentation <http://cppformat.github.io/latest/>`_
 
 Features
 --------
@@ -27,11 +29,11 @@ Features
 * Write API similar to the one used by IOStreams but stateless allowing
   faster implementation.
 * Format API with `format string syntax
-  <http://cppformat.readthedocs.org/en/latest/syntax.html>`_
+  <http://cppformat.github.io/latest/syntax.html>`_
   similar to the one used by `str.format
   <http://docs.python.org/2/library/stdtypes.html#str.format>`_ in Python.
 * Safe `printf implementation
-  <http://cppformat.readthedocs.org/en/stable/reference.html#printf-formatting-functions>`_
+  <http://cppformat.github.io/latest/reference.html#printf-formatting-functions>`_
   including the POSIX extension for positional arguments.
 * Support for user-defined types.
 * High speed: performance of the format API is close to that of
@@ -48,7 +50,8 @@ Features
   reported using exceptions, automatic memory management prevents buffer
   overflow errors.
 * Ease of use: small self-contained code base, no external dependencies,
-  permissive BSD `license`_.
+  permissive BSD `license
+  <https://github.com/cppformat/cppformat/blob/master/LICENSE.rst>`_
 * `Portability <http://cppformat.github.io#portability>`_ with consistent output
   across platforms and support for older compilers.
 * Clean warning-free codebase even on high warning levels
@@ -56,7 +59,7 @@ Features
 * Support for wide strings.
 * Optional header-only configuration enabled with the ``FMT_HEADER_ONLY`` macro.
 
-See the `documentation <http://cppformat.readthedocs.org/en/stable/>`_ for more details.
+See the `documentation <http://cppformat.github.io/latest/>`_ for more details.
 
 Examples
 --------
@@ -103,10 +106,10 @@ An object of any user-defined type for which there is an overloaded
     // s == "The date is 2012-12-9"
 
 You can use the `FMT_VARIADIC
-<http://cppformat.readthedocs.org/en/latest/reference.html#utilities>`_
+<http://cppformat.github.io/latest/reference.html#utilities>`_
 macro to create your own functions similar to `format
-<http://cppformat.readthedocs.org/en/latest/reference.html#format>`_ and
-`print <http://cppformat.readthedocs.org/en/latest/reference.html#print>`_
+<http://cppformat.github.io/latest/reference.html#format>`_ and
+`print <http://cppformat.github.io/latest/reference.html#print>`_
 which take arbitrary arguments:
 
 .. code:: c++
@@ -142,6 +145,8 @@ Projects using this library
 * `PenUltima Online (POL) <http://www.polserver.com/>`_:
   An MMO server, compatible with most Ultima Online clients
 
+* `quasardb <https://www.quasardb.net/>`_: A distributed, high-performance, associative database
+
 * `readpe <https://bitbucket.org/sys_dev/readpe>`_: Read Portable Executable
 
 * `Saddy <https://code.google.com/p/saddy/>`_:
@@ -151,6 +156,8 @@ Projects using this library
   Business intelligence software
 
 * `spdlog <https://github.com/gabime/spdlog>`_: Super fast C++ logging library
+
+* `Touch Surgery <https://www.touchsurgery.com/>`_: Surgery simulator
 
 * `TrinityCore <https://github.com/TrinityCore/TrinityCore>`_: Open-source MMORPG framework
 
@@ -174,10 +181,10 @@ all the features I needed.
 Printf
 ~~~~~~
 
-The good thing about printf is that it is very fast and readily available
+The good thing about printf is that it is pretty fast and readily available
 being a part of the C standard library. The main drawback is that it
 doesn't support user-defined types. Printf also has safety issues although
-they are mostly solved with `_attribute__ ((format (printf, ...))
+they are mostly solved with `__attribute__ ((format (printf, ...))
 <http://gcc.gnu.org/onlinedocs/gcc/Function-Attributes.html>`_ in GCC.
 There is a POSIX extension that adds positional arguments required for
 `i18n <http://en.wikipedia.org/wiki/Internationalization_and_localization>`_
@@ -257,15 +264,6 @@ on integer formatting than ``fmt::Writer`` on Karma's own benchmark,
 see `Fast integer to string conversion in C++
 <http://zverovich.net/2013/09/07/integer-to-string-conversion-in-cplusplus.html>`_.
 
-What Users Say
---------------
-
-  Thanks for creating this library. It’s been a hole in C++ for a long time.
-  I’ve used both boost::format and loki::SPrintf, and neither felt like the
-  right answer. This does.
-
-  -- Kurt Haas
-
 Benchmarks
 ----------
 
@@ -322,7 +320,7 @@ tinyformat              64.6                  418                386
 Boost Format           222.8                  990                923
 ============ =============== ==================== ==================
 
-As you can see, C++ Format has 80% less overhead in terms of resulting
+As you can see, C++ Format has two times less overhead in terms of resulting
 code size compared to IOStreams and comes pretty close to ``printf``.
 Boost Format has by far the largest overheads.
 
@@ -349,7 +347,7 @@ Running the tests
 Please refer to `Building the library`__ for the instructions on how to build
 the library and run the unit tests.
 
-__ http://cppformat.readthedocs.org/en/latest/usage.html#building-the-library
+__ http://cppformat.github.io/latest/usage.html#building-the-library
 
 Benchmarks reside in a separate repository,
 `format-benchmarks <https://github.com/cppformat/format-benchmark>`_,
@@ -371,41 +369,23 @@ or the bloat test::
 License
 -------
 
-Copyright (c) 2012 - 2015, Victor Zverovich
-
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-
-1. Redistributions of source code must retain the above copyright notice, this
-   list of conditions and the following disclaimer.
-2. Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-Documentation License
----------------------
+C++ Format is distributed under the BSD `license
+<https://github.com/cppformat/cppformat/blob/master/LICENSE.rst>`_.
 
 The `Format String Syntax
-<http://cppformat.readthedocs.org/en/latest/syntax.html>`_
+<http://cppformat.github.io/latest/syntax.html>`_
 section in the documentation is based on the one from Python `string module
 documentation <http://docs.python.org/3/library/string.html#module-string>`_
 adapted for the current library. For this reason the documentation is
 distributed under the Python Software Foundation license available in
-`doc/LICENSE.python
-<https://raw.github.com/cppformat/cppformat/master/doc/LICENSE.python>`_.
+`doc/python-license.txt
+<https://raw.github.com/cppformat/cppformat/master/doc/python-license.txt>`_.
+It only applies if you distribute the documentation of C++ Format.
+
+Links
+-----
+
+`API changes/compatibility report <http://upstream-tracker.org/versions/cppformat.html>`_
 
 Acknowledgments
 ---------------

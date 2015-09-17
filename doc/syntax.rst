@@ -15,18 +15,23 @@ literal text, it can be escaped by doubling: ``{{`` and ``}}``.
 The grammar for a replacement field is as follows:
 
 .. productionlist:: sf
-   replacement_field: "{" [`arg_index`] [":" `format_spec`] "}"
-   arg_index: `integer`
+   replacement_field: "{" [`arg_id`] [":" `format_spec`] "}"
+   arg_id: `integer` | `identifier`
+   integer: `digit`+
+   digit: "0"..."9"
+   identifier: `id_start` `id_continue`*
+   id_start: "a"..."z" | "A"..."Z" | "_"
+   id_continue: `id_start` | `digit`
 
-In less formal terms, the replacement field can start with an *arg_index*
+In less formal terms, the replacement field can start with an *arg_id*
 that specifies the argument whose value is to be formatted and inserted into
 the output instead of the replacement field.
-The *arg_index* is optionally followed by a *format_spec*, which is preceded
+The *arg_id* is optionally followed by a *format_spec*, which is preceded
 by a colon ``':'``.  These specify a non-default format for the replacement value.
 
 See also the :ref:`formatspec` section.
 
-If the numerical arg_indexes in a format string are 0, 1, 2, ... in sequence,
+If the numerical arg_ids in a format string are 0, 1, 2, ... in sequence,
 they can all be omitted (not just some) and the numbers 0, 1, 2, ... will be
 automatically inserted in that order.
 
@@ -73,8 +78,8 @@ The general form of a *standard format specifier* is:
    fill: <a character other than '{' or '}'>
    align: "<" | ">" | "=" | "^"
    sign: "+" | "-" | " "
-   width: `integer`
-   precision: `integer` | "{" `arg_index` "}"
+   width: `integer` | "{" `arg_id` "}"
+   precision: `integer` | "{" `arg_id` "}"
    type: `int_type` | "c" | "e" | "E" | "f" | "F" | "g" | "G" | "p" | "s"
    int_type: "b" | "B" | "d" | "o" | "x" | "X"
 
@@ -157,8 +162,8 @@ displayed after the decimal point for a floating-point value formatted with
 ``'f'`` and ``'F'``, or before and after the decimal point for a floating-point
 value formatted with ``'g'`` or ``'G'``.  For non-number types the field
 indicates the maximum field size - in other words, how many characters will be
-used from the field content. The *precision* is not allowed for integer values
-or pointers.
+used from the field content. The *precision* is not allowed for integer,
+character, Boolean, and pointer values.
 
 Finally, the *type* determines how the data should be presented.
 
@@ -213,6 +218,10 @@ The available integer presentation types are:
 +---------+----------------------------------------------------------+
 | none    | The same as ``'d'``.                                     |
 +---------+----------------------------------------------------------+
+
+Integer presentation types can also be used with character and Boolean values.
+Boolean values are formatted using textual representation, either ``true`` or
+``false``, if the presentation type is not specified.
 
 The available presentation types for floating-point values are:
 

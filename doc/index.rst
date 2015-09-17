@@ -5,6 +5,17 @@ C++ Format (cppformat) is an open-source formatting library for C++.
 It can be used as a safe alternative to printf or as a fast
 alternative to IOStreams.
 
+.. raw:: html
+
+   <div class="panel panel-default">
+     <div class="panel-heading">What users say:</div>
+     <div class="panel-body">
+       Thanks for creating this library. It’s been a hole in C++ for a long time.
+       I’ve used both boost::format and loki::SPrintf, and neither felt like the
+       right answer. This does.
+     </div>
+   </div>
+
 .. _format-api:
 
 Format API
@@ -85,7 +96,7 @@ throws a ``FormatError`` exception with description
 ``"forty-two"`` is a string while the format code ``d``
 only applies to integers.
 
-Where possible, errors are catched at compile time. For example, the code
+Where possible, errors are caught at compile time. For example, the code
 
 .. code:: c++
 
@@ -147,7 +158,7 @@ in open-source and commercial projects.
 
 .. raw:: html
 
-  <a class="btn btn-success" href="https://github.com/cppformat/cppformat">GitHub Repository</a></p>
+  <a class="btn btn-success" href="https://github.com/cppformat/cppformat">GitHub Repository</a>
 
   <div class="section footer">
     <iframe src="http://ghbtns.com/github-btn.html?user=cppformat&amp;repo=cppformat&amp;type=watch&amp;count=true"

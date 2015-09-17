@@ -41,7 +41,7 @@ current directory. Now you can build C++ Format by running :command:`make`.
 Once the library has been built you can invoke :command:`make test` to run
 the tests.
 
-If you use Windows and have Vistual Studio installed, a :file:`FORMAT.sln`
+If you use Windows and have Visual Studio installed, a :file:`FORMAT.sln`
 file and several :file:`.vcproj` files will be created. You can then build them
 using Visual Studio or msbuild.
 
@@ -64,3 +64,10 @@ For an example of using C++ Format with Android NDK, see the
 repository.
 
 __ https://github.com/cppformat/cppformat/blob/master/Android.mk
+
+Homebrew
+========
+
+C++ Format can be installed on OS X using `Homebrew <http://brew.sh/>`_::
+
+  brew install cppformat

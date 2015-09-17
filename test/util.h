@@ -29,6 +29,8 @@
 #include <cstdio>
 #include <string>
 
+#include "posix.h"
+
 enum {BUFFER_SIZE = 256};
 
 #ifdef _MSC_VER
@@ -49,3 +51,32 @@ void safe_sprintf(char (&buffer)[SIZE], const char *format, ...) {
 void increment(char *s);
 
 std::string get_system_error(int error_code);
+
+extern const char *const FILE_CONTENT;
+
+// Opens a buffered file for reading.
+fmt::BufferedFile open_buffered_file(FILE **fp = 0);
+
+inline FILE *safe_fopen(const char *filename, const char *mode) {
+#if defined(_WIN32) && !defined(__MINGW32__)
+  // Fix MSVC warning about "unsafe" fopen.
+  FILE *f = 0;
+  errno = fopen_s(&f, filename, mode);
+  return f;
+#else
+  return std::fopen(filename, mode);
+#endif
+}
+
+class TestString {
+ private:
+  std::string value_;
+
+ public:
+  explicit TestString(const char *value = "") : value_(value) {}
+
+  friend std::ostream &operator<<(std::ostream &os, const TestString &s) {
+    os << s.value_;
+    return os;
+  }
+};

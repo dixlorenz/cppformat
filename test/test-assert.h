@@ -1,7 +1,7 @@
 /*
- Test wrappers around POSIX functions.
+ Test version of FMT_ASSERT
 
- Copyright (c) 2012-2014, Victor Zverovich
+ Copyright (c) 2015, Victor Zverovich
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -25,56 +25,23 @@
  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef FMT_POSIX_TEST_H
-#define FMT_POSIX_TEST_H
+#ifndef FMT_TEST_ASSERT_H
+#define FMT_TEST_ASSERT_H
 
-#include <errno.h>
-#include <stdio.h>
+#include <stdexcept>
 
-#ifndef _WIN32
-struct stat;
-#else
-# include <windows.h>
-#endif
+class AssertionFailure : public std::logic_error {
+ public:
+  explicit AssertionFailure(const char *message) : std::logic_error(message) {}
+};
 
-namespace test {
+#define FMT_ASSERT(condition, message) \
+  if (!(condition)) throw AssertionFailure(message);
 
-#if !defined(_WIN32) || defined(__MINGW32__)
-// Size type for read and write.
-typedef size_t size_t;
-typedef ssize_t ssize_t;
-int open(const char *path, int oflag, int mode);
-int fstat(int fd, struct stat *buf);
-long sysconf(int name);
-#else
-typedef unsigned size_t;
-typedef int ssize_t;
-errno_t sopen_s(
-    int* pfh, const char *filename, int oflag, int shflag, int pmode);
-DWORD GetFileSize(HANDLE hFile, LPDWORD lpFileSizeHigh);
-#endif
+#include "gtest-extra.h"
 
-int close(int fildes);
+// Expects an assertion failure.
+#define EXPECT_ASSERT(stmt, message) \
+  EXPECT_THROW_MSG(stmt, AssertionFailure, message)
 
-int dup(int fildes);
-int dup2(int fildes, int fildes2);
-
-FILE *fdopen(int fildes, const char *mode);
-
-ssize_t read(int fildes, void *buf, size_t nbyte);
-ssize_t write(int fildes, const void *buf, size_t nbyte);
-
-#ifndef _WIN32
-int pipe(int fildes[2]);
-#else
-int pipe(int *pfds, unsigned psize, int textmode);
-#endif
-
-FILE *fopen(const char *filename, const char *mode);
-int fclose(FILE *stream);
-int (fileno)(FILE *stream);
-}  // namespace test
-
-#define FMT_SYSTEM(call) test::call
-
-#endif  // FMT_POSIX_TEST_H
+#endif  // FMT_TEST_ASSERT_H

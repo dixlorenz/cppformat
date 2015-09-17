@@ -40,7 +40,7 @@ const unsigned BIG_NUM = INT_MAX + 1u;
 
 // Makes format string argument positional.
 std::string make_positional(fmt::StringRef format) {
-  std::string s(format);
+  std::string s(format.to_string());
   s.replace(s.find('%'), 1, "%1$");
   return s;
 }
@@ -424,6 +424,10 @@ TEST(PrintfTest, Pointer) {
   int n;
   void *p = &n;
   EXPECT_PRINTF(fmt::format("{}", p), "%p", p);
+}
+
+TEST(PrintfTest, Custom) {
+  EXPECT_PRINTF("abc", "%s", TestString("abc"));
 }
 
 TEST(PrintfTest, Location) {

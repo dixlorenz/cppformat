@@ -25,6 +25,8 @@
  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "test-assert.h"
+
 #include <cfloat>
 #include <climits>
 #include <cstring>
@@ -66,8 +68,9 @@ std::basic_ostream<Char> &operator<<(std::basic_ostream<Char> &os, Test) {
 
 template <typename Char, typename T>
 Arg make_arg(const T &value) {
-  Arg arg = fmt::internal::MakeArg<Char>(value);
-  arg.type = static_cast<Arg::Type>(fmt::internal::MakeArg<Char>::type(value));
+  Arg arg = fmt::internal::MakeValue<Char>(value);
+  arg.type = static_cast<Arg::Type>(
+        fmt::internal::MakeValue<Char>::type(value));
   return arg;
 }
 }  // namespace
@@ -412,9 +415,10 @@ ARG_INFO(INT, int, int_value);
 ARG_INFO(UINT, unsigned, uint_value);
 ARG_INFO(LONG_LONG, fmt::LongLong, long_long_value);
 ARG_INFO(ULONG_LONG, fmt::ULongLong, ulong_long_value);
+ARG_INFO(BOOL, int, int_value);
+ARG_INFO(CHAR, int, int_value);
 ARG_INFO(DOUBLE, double, double_value);
 ARG_INFO(LONG_DOUBLE, long double, long_double_value);
-ARG_INFO(CHAR, int, int_value);
 ARG_INFO(CSTRING, const char *, string.value);
 ARG_INFO(STRING, const char *, string.value);
 ARG_INFO(WSTRING, const wchar_t *, wstring.value);
@@ -422,7 +426,7 @@ ARG_INFO(POINTER, const void *, pointer);
 ARG_INFO(CUSTOM, Arg::CustomValue, custom);
 
 #define CHECK_ARG_INFO(Type, field, value) { \
-  Arg arg = {}; \
+  Arg arg = Arg(); \
   arg.field = value; \
   EXPECT_EQ(value, ArgInfo<Arg::Type>::get(arg)); \
 }
@@ -441,7 +445,7 @@ TEST(ArgTest, ArgInfo) {
   CHECK_ARG_INFO(WSTRING, wstring.value, WSTR);
   int p = 0;
   CHECK_ARG_INFO(POINTER, pointer, &p);
-  Arg arg = {};
+  Arg arg = Arg();
   arg.custom.value = &p;
   EXPECT_EQ(&p, ArgInfo<Arg::CUSTOM>::get(arg).value);
 }
@@ -462,8 +466,8 @@ TEST(ArgTest, ArgInfo) {
 
 TEST(ArgTest, MakeArg) {
   // Test bool.
-  EXPECT_ARG_(char, INT, bool, int, true);
-  EXPECT_ARG_(wchar_t, INT, bool, int, true);
+  EXPECT_ARG_(char, BOOL, bool, int, true);
+  EXPECT_ARG_(wchar_t, BOOL, bool, int, true);
 
   // Test char.
   EXPECT_ARG(CHAR, signed char, 'a');
@@ -557,7 +561,7 @@ TEST(ArgTest, MakeArg) {
   EXPECT_EQ(fmt::internal::Arg::CUSTOM, arg.type);
   EXPECT_EQ(&t, arg.custom.value);
   fmt::MemoryWriter w;
-  fmt::BasicFormatter<char> formatter(w);
+  fmt::BasicFormatter<char> formatter(fmt::ArgList(), w);
   const char *s = "}";
   arg.custom.format(&formatter, &t, &s);
   EXPECT_EQ("test", w.str());
@@ -678,7 +682,7 @@ TEST(ArgVisitorTest, VisitUnhandledArg) {
 TEST(ArgVisitorTest, VisitInvalidArg) {
   Arg arg = Arg();
   arg.type = static_cast<Arg::Type>(Arg::CUSTOM + 1);
-  EXPECT_DEBUG_DEATH(TestVisitor().visit(arg), "Assertion");
+  EXPECT_ASSERT(TestVisitor().visit(arg), "invalid argument type");
 }
 
 // Tests fmt::internal::count_digits for integer type Int.
@@ -722,12 +726,14 @@ TEST(UtilTest, UTF8ToUTF16) {
 }
 
 template <typename Converter, typename Char>
-void check_utf_conversion_error(const char *message) {
+void check_utf_conversion_error(
+        const char *message,
+        fmt::BasicStringRef<Char> str = fmt::BasicStringRef<Char>(0, 0)) {
   fmt::MemoryWriter out;
   fmt::internal::format_windows_error(out, ERROR_INVALID_PARAMETER, message);
   fmt::SystemError error(0, "");
   try {
-    Converter(fmt::BasicStringRef<Char>(0, 0));
+    (Converter)(str);
   } catch (const fmt::SystemError &e) {
     error = e;
   }
@@ -741,13 +747,17 @@ TEST(UtilTest, UTF16ToUTF8Error) {
 }
 
 TEST(UtilTest, UTF8ToUTF16Error) {
+  const char *message = "cannot convert string from UTF-8 to UTF-16";
+  check_utf_conversion_error<fmt::internal::UTF8ToUTF16, char>(message);
   check_utf_conversion_error<fmt::internal::UTF8ToUTF16, char>(
-      "cannot convert string from UTF-8 to UTF-16");
+    message, fmt::StringRef("foo", INT_MAX + 1u));
 }
 
 TEST(UtilTest, UTF16ToUTF8Convert) {
   fmt::internal::UTF16ToUTF8 u;
   EXPECT_EQ(ERROR_INVALID_PARAMETER, u.convert(fmt::WStringRef(0, 0)));
+  EXPECT_EQ(ERROR_INVALID_PARAMETER,
+            u.convert(fmt::WStringRef(L"foo", INT_MAX + 1u)));
 }
 #endif  // _WIN32
 
@@ -841,3 +851,30 @@ TEST(UtilTest, IsEnumConvertibleToInt) {
 }
 #endif
 
+template <typename T>
+bool check_enable_if(
+    typename fmt::internal::EnableIf<sizeof(T) == sizeof(int), T>::type *) {
+  return true;
+}
+
+template <typename T>
+bool check_enable_if(
+    typename fmt::internal::EnableIf<sizeof(T) != sizeof(int), T>::type *) {
+  return false;
+}
+
+TEST(UtilTest, EnableIf) {
+  int i = 0;
+  EXPECT_TRUE(check_enable_if<int>(&i));
+  char c = 0;
+  EXPECT_FALSE(check_enable_if<char>(&c));
+}
+
+TEST(UtilTest, Conditional) {
+  int i = 0;
+  fmt::internal::Conditional<true, int, char>::type *pi = &i;
+  (void)pi;
+  char c = 0;
+  fmt::internal::Conditional<false, int, char>::type *pc = &c;
+  (void)pc;
+}

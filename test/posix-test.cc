@@ -1,7 +1,7 @@
 /*
- Test wrappers around POSIX functions.
+ Tests of the C++ interface to POSIX functions
 
- Copyright (c) 2012-2014, Victor Zverovich
+ Copyright (c) 2015, Victor Zverovich
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -25,415 +25,358 @@
  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-// Disable bogus MSVC warnings.
-#define _CRT_SECURE_NO_WARNINGS
-
-#include "posix-test.h"
-
-#include <errno.h>
-#include <fcntl.h>
-#include <climits>
-
-#ifdef _WIN32
-# include <io.h>
-# undef max
-# undef ERROR
-#endif
+#include <cstring>
 
 #include "gtest-extra.h"
+#include "posix.h"
+#include "util.h"
+
+#ifdef __MINGW32__
+# undef fileno
+#endif
 
 using fmt::BufferedFile;
 using fmt::ErrorCode;
 using fmt::File;
 
-namespace {
-int open_count;
-int close_count;
-int dup_count;
-int dup2_count;
-int fdopen_count;
-int read_count;
-int write_count;
-int pipe_count;
-int fopen_count;
-int fclose_count;
-int fileno_count;
-std::size_t read_nbyte;
-std::size_t write_nbyte;
-bool sysconf_error;
+using testing::internal::scoped_ptr;
 
-enum FStatSimulation { NONE, MAX_SIZE, ERROR } fstat_sim;
+// Checks if the file is open by reading one character from it.
+bool isopen(int fd) {
+  char buffer;
+  return FMT_POSIX(read(fd, &buffer, 1)) == 1;
 }
 
-#define EMULATE_EINTR(func, error_result) \
-  if (func##_count != 0) { \
-    if (func##_count++ != 3) { \
-      errno = EINTR; \
-      return error_result; \
-    } \
-  }
-
-#ifndef _WIN32
-int test::open(const char *path, int oflag, int mode) {
-  EMULATE_EINTR(open, -1);
-  return ::open(path, oflag, mode);
+bool isclosed(int fd) {
+  char buffer;
+  std::streamsize result = 0;
+  SUPPRESS_ASSERT(result = FMT_POSIX(read(fd, &buffer, 1)));
+  return result == -1 && errno == EBADF;
 }
 
-static off_t max_file_size() { return std::numeric_limits<off_t>::max(); }
-
-int test::fstat(int fd, struct stat *buf) {
-  int result = ::fstat(fd, buf);
-  if (fstat_sim == MAX_SIZE)
-    buf->st_size = max_file_size();
-  return result;
-}
-
-long test::sysconf(int name) {
-  long result = ::sysconf(name);
-  if (!sysconf_error)
-    return result;
-  // Simulate an error.
-  errno = EINVAL;
-  return -1;
-}
-#else
-errno_t test::sopen_s(
-    int* pfh, const char *filename, int oflag, int shflag, int pmode) {
-  EMULATE_EINTR(open, EINTR);
-  return _sopen_s(pfh, filename, oflag, shflag, pmode);
-}
-
-static LONGLONG max_file_size() { return std::numeric_limits<LONGLONG>::max(); }
-
-DWORD test::GetFileSize(HANDLE hFile, LPDWORD lpFileSizeHigh) {
-  if (fstat_sim == ERROR) {
-    SetLastError(ERROR_ACCESS_DENIED);
-    return INVALID_FILE_SIZE;
-  }
-  if (fstat_sim == MAX_SIZE) {
-    DWORD max = std::numeric_limits<DWORD>::max();
-    *lpFileSizeHigh = max >> 1;
-    return max;
-  }
-  return ::GetFileSize(hFile, lpFileSizeHigh);
-}
-#endif
-
-int test::close(int fildes) {
-  // Close the file first because close shouldn't be retried.
-  int result = ::FMT_POSIX(close(fildes));
-  EMULATE_EINTR(close, -1);
-  return result;
-}
-
-int test::dup(int fildes) {
-  EMULATE_EINTR(dup, -1);
-  return ::FMT_POSIX(dup(fildes));
-}
-
-int test::dup2(int fildes, int fildes2) {
-  EMULATE_EINTR(dup2, -1);
-  return ::FMT_POSIX(dup2(fildes, fildes2));
-}
-
-FILE *test::fdopen(int fildes, const char *mode) {
-  EMULATE_EINTR(fdopen, 0);
-  return ::FMT_POSIX(fdopen(fildes, mode));
-}
-
-test::ssize_t test::read(int fildes, void *buf, test::size_t nbyte) {
-  read_nbyte = nbyte;
-  EMULATE_EINTR(read, -1);
-  return ::FMT_POSIX(read(fildes, buf, nbyte));
-}
-
-test::ssize_t test::write(int fildes, const void *buf, test::size_t nbyte) {
-  write_nbyte = nbyte;
-  EMULATE_EINTR(write, -1);
-  return ::FMT_POSIX(write(fildes, buf, nbyte));
-}
-
-#ifndef _WIN32
-int test::pipe(int fildes[2]) {
-  EMULATE_EINTR(pipe, -1);
-  return ::pipe(fildes);
-}
-#else
-int test::pipe(int *pfds, unsigned psize, int textmode) {
-  EMULATE_EINTR(pipe, -1);
-  return _pipe(pfds, psize, textmode);
-}
-#endif
-
-FILE *test::fopen(const char *filename, const char *mode) {
-  EMULATE_EINTR(fopen, 0);
-  return ::fopen(filename, mode);
-}
-
-int test::fclose(FILE *stream) {
-  EMULATE_EINTR(fclose, EOF);
-  return ::fclose(stream);
-}
-
-int (test::fileno)(FILE *stream) {
-  EMULATE_EINTR(fileno, -1);
-  return ::FMT_POSIX(fileno(stream));
-}
-
-#ifndef _WIN32
-# define EXPECT_RETRY(statement, func, message) \
-    func##_count = 1; \
-    statement; \
-    EXPECT_EQ(4, func##_count); \
-    func##_count = 0;
-# define EXPECT_EQ_POSIX(expected, actual) EXPECT_EQ(expected, actual)
-#else
-# define EXPECT_RETRY(statement, func, message) \
-    func##_count = 1; \
-    EXPECT_SYSTEM_ERROR(statement, EINTR, message); \
-    func##_count = 0;
-# define EXPECT_EQ_POSIX(expected, actual)
-#endif
-
-void write_file(fmt::StringRef filename, fmt::StringRef content) {
-  fmt::BufferedFile f(filename, "w");
-  f.print("{}", content);
-}
-
-TEST(UtilTest, StaticAssert) {
-  FMT_STATIC_ASSERT(true, "success");
-  // Static assertion failure is tested in compile-test because it causes
-  // a compile-time error.
-}
-
-TEST(UtilTest, GetPageSize) {
-#ifdef _WIN32
-  SYSTEM_INFO si = {};
-  GetSystemInfo(&si);
-  EXPECT_EQ(si.dwPageSize, fmt::getpagesize());
-#else
-  EXPECT_EQ(sysconf(_SC_PAGESIZE), fmt::getpagesize());
-  sysconf_error = true;
-  EXPECT_SYSTEM_ERROR(
-      fmt::getpagesize(), EINVAL, "cannot get memory page size");
-  sysconf_error = false;
-#endif
-}
-
-TEST(FileTest, OpenRetry) {
-  write_file("test", "there must be something here");
-  File *f = 0;
-  EXPECT_RETRY(f = new File("test", File::RDONLY),
-               open, "cannot open file test");
-#ifndef _WIN32
-  char c = 0;
-  f->read(&c, 1);
-#endif
-  delete f;
-}
-
-TEST(FileTest, CloseNoRetryInDtor) {
+// Opens a file for reading.
+File open_file() {
   File read_end, write_end;
   File::pipe(read_end, write_end);
-  File *f = new File(std::move(read_end));
-  int saved_close_count = 0;
+  write_end.write(FILE_CONTENT, std::strlen(FILE_CONTENT));
+  write_end.close();
+  return read_end;
+}
+
+// Attempts to write a string to a file.
+void write(File &f, fmt::StringRef s) {
+  std::size_t num_chars_left = s.size();
+  const char *ptr = s.data();
+  do {
+    std::streamsize count = f.write(ptr, num_chars_left);
+    ptr += count;
+    // We can't write more than size_t bytes since num_chars_left
+    // has type size_t.
+    num_chars_left -= static_cast<std::size_t>(count);
+  } while (num_chars_left != 0);
+}
+
+TEST(BufferedFileTest, DefaultCtor) {
+  BufferedFile f;
+  EXPECT_TRUE(f.get() == 0);
+}
+
+TEST(BufferedFileTest, MoveCtor) {
+  BufferedFile bf = open_buffered_file();
+  FILE *fp = bf.get();
+  EXPECT_TRUE(fp != 0);
+  BufferedFile bf2(std::move(bf));
+  EXPECT_EQ(fp, bf2.get());
+  EXPECT_TRUE(bf.get() == 0);
+}
+
+TEST(BufferedFileTest, MoveAssignment) {
+  BufferedFile bf = open_buffered_file();
+  FILE *fp = bf.get();
+  EXPECT_TRUE(fp != 0);
+  BufferedFile bf2;
+  bf2 = std::move(bf);
+  EXPECT_EQ(fp, bf2.get());
+  EXPECT_TRUE(bf.get() == 0);
+}
+
+TEST(BufferedFileTest, MoveAssignmentClosesFile) {
+  BufferedFile bf = open_buffered_file();
+  BufferedFile bf2 = open_buffered_file();
+  int old_fd = bf2.fileno();
+  bf2 = std::move(bf);
+  EXPECT_TRUE(isclosed(old_fd));
+}
+
+TEST(BufferedFileTest, MoveFromTemporaryInCtor) {
+  FILE *fp = 0;
+  BufferedFile f(open_buffered_file(&fp));
+  EXPECT_EQ(fp, f.get());
+}
+
+TEST(BufferedFileTest, MoveFromTemporaryInAssignment) {
+  FILE *fp = 0;
+  BufferedFile f;
+  f = open_buffered_file(&fp);
+  EXPECT_EQ(fp, f.get());
+}
+
+TEST(BufferedFileTest, MoveFromTemporaryInAssignmentClosesFile) {
+  BufferedFile f = open_buffered_file();
+  int old_fd = f.fileno();
+  f = open_buffered_file();
+  EXPECT_TRUE(isclosed(old_fd));
+}
+
+TEST(BufferedFileTest, CloseFileInDtor) {
+  int fd = 0;
+  {
+    BufferedFile f = open_buffered_file();
+    fd = f.fileno();
+  }
+  EXPECT_TRUE(isclosed(fd));
+}
+
+TEST(BufferedFileTest, CloseErrorInDtor) {
+  scoped_ptr<BufferedFile> f(new BufferedFile(open_buffered_file()));
   EXPECT_WRITE(stderr, {
-    close_count = 1;
-    delete f;
-    saved_close_count = close_count;
-    close_count = 0;
-  }, format_system_error(EINTR, "cannot close file") + "\n");
-  EXPECT_EQ(2, saved_close_count);
+      // The close function must be called inside EXPECT_WRITE, otherwise
+      // the system may recycle closed file descriptor when redirecting the
+      // output in EXPECT_STDERR and the second close will break output
+      // redirection.
+      FMT_POSIX(close(f->fileno()));
+      SUPPRESS_ASSERT(f.reset());
+  }, format_system_error(EBADF, "cannot close file") + "\n");
 }
 
-TEST(FileTest, CloseNoRetry) {
-  File read_end, write_end;
-  File::pipe(read_end, write_end);
-  close_count = 1;
-  EXPECT_SYSTEM_ERROR(read_end.close(), EINTR, "cannot close file");
-  EXPECT_EQ(2, close_count);
-  close_count = 0;
-}
-
-TEST(FileTest, Size) {
-  std::string content = "top secret, destroy before reading";
-  write_file("test", content);
-  File f("test", File::RDONLY);
-  EXPECT_GE(f.size(), 0);
-  fmt::ULongLong file_size = f.size();
-  EXPECT_EQ(content.size(), file_size);
-#ifdef _WIN32
-  fmt::MemoryWriter message;
-  fmt::internal::format_windows_error(
-      message, ERROR_ACCESS_DENIED, "cannot get file size");
-  fstat_sim = ERROR;
-  EXPECT_THROW_MSG(f.size(), fmt::WindowsError, message.str());
-  fstat_sim = NONE;
-#else
+TEST(BufferedFileTest, Close) {
+  BufferedFile f = open_buffered_file();
+  int fd = f.fileno();
   f.close();
-  EXPECT_SYSTEM_ERROR(f.size(), EBADF, "cannot get file attributes");
-#endif
+  EXPECT_TRUE(f.get() == 0);
+  EXPECT_TRUE(isclosed(fd));
 }
 
-TEST(FileTest, MaxSize) {
-  write_file("test", "");
-  File f("test", File::RDONLY);
-  fstat_sim = MAX_SIZE;
-  EXPECT_GE(f.size(), 0);
-  EXPECT_EQ(max_file_size(), f.size());
-  fstat_sim = NONE;
+TEST(BufferedFileTest, CloseError) {
+  BufferedFile f = open_buffered_file();
+  FMT_POSIX(close(f.fileno()));
+  EXPECT_SYSTEM_ERROR_NOASSERT(f.close(), EBADF, "cannot close file");
+  EXPECT_TRUE(f.get() == 0);
 }
 
-TEST(FileTest, ReadRetry) {
-  File read_end, write_end;
-  File::pipe(read_end, write_end);
-  enum { SIZE = 4 };
-  write_end.write("test", SIZE);
-  write_end.close();
-  char buffer[SIZE];
-  std::streamsize count = 0;
-  EXPECT_RETRY(count = read_end.read(buffer, SIZE),
-      read, "cannot read from file");
-  EXPECT_EQ_POSIX(static_cast<std::streamsize>(SIZE), count);
+TEST(BufferedFileTest, Fileno) {
+  BufferedFile f;
+  // fileno on a null FILE pointer either crashes or returns an error.
+  EXPECT_DEATH_IF_SUPPORTED({
+    try {
+      f.fileno();
+    } catch (fmt::SystemError) {
+      std::exit(1);
+    }
+  }, "");
+  f = open_buffered_file();
+  EXPECT_TRUE(f.fileno() != -1);
+  File copy = File::dup(f.fileno());
+  EXPECT_READ(copy, FILE_CONTENT);
 }
 
-TEST(FileTest, WriteRetry) {
-  File read_end, write_end;
-  File::pipe(read_end, write_end);
-  enum { SIZE = 4 };
-  std::streamsize count = 0;
-  EXPECT_RETRY(count = write_end.write("test", SIZE),
-      write, "cannot write to file");
-  write_end.close();
-#ifndef _WIN32
-  EXPECT_EQ(static_cast<std::streamsize>(SIZE), count);
-  char buffer[SIZE + 1];
-  read_end.read(buffer, SIZE);
-  buffer[SIZE] = '\0';
-  EXPECT_STREQ("test", buffer);
-#endif
+TEST(FileTest, DefaultCtor) {
+  File f;
+  EXPECT_EQ(-1, f.descriptor());
 }
 
-#ifdef _WIN32
-TEST(FileTest, ConvertReadCount) {
-  File read_end, write_end;
-  File::pipe(read_end, write_end);
-  char c;
-  std::size_t size = UINT_MAX;
-  if (sizeof(unsigned) != sizeof(std::size_t))
-    ++size;
-  read_count = 1;
-  read_nbyte = 0;
-  EXPECT_THROW(read_end.read(&c, size), fmt::SystemError);
-  read_count = 0;
-  EXPECT_EQ(UINT_MAX, read_nbyte);
+TEST(FileTest, OpenBufferedFileInCtor) {
+  FILE *fp = safe_fopen("test-file", "w");
+  std::fputs(FILE_CONTENT, fp);
+  std::fclose(fp);
+  File f("test-file", File::RDONLY);
+  ASSERT_TRUE(isopen(f.descriptor()));
 }
 
-TEST(FileTest, ConvertWriteCount) {
-  File read_end, write_end;
-  File::pipe(read_end, write_end);
-  char c;
-  std::size_t size = UINT_MAX;
-  if (sizeof(unsigned) != sizeof(std::size_t))
-    ++size;
-  write_count = 1;
-  write_nbyte = 0;
-  EXPECT_THROW(write_end.write(&c, size), fmt::SystemError);
-  write_count = 0;
-  EXPECT_EQ(UINT_MAX, write_nbyte);
-}
-#endif
-
-TEST(FileTest, DupNoRetry) {
-  int stdout_fd = FMT_POSIX(fileno(stdout));
-  dup_count = 1;
-  EXPECT_SYSTEM_ERROR(File::dup(stdout_fd), EINTR,
-      fmt::format("cannot duplicate file descriptor {}", stdout_fd));
-  dup_count = 0;
+TEST(FileTest, OpenBufferedFileError) {
+  EXPECT_SYSTEM_ERROR(File("nonexistent", File::RDONLY),
+      ENOENT, "cannot open file nonexistent");
 }
 
-TEST(FileTest, Dup2Retry) {
-  int stdout_fd = FMT_POSIX(fileno(stdout));
-  File f1 = File::dup(stdout_fd), f2 = File::dup(stdout_fd);
-  EXPECT_RETRY(f1.dup2(f2.descriptor()), dup2,
-      fmt::format("cannot duplicate file descriptor {} to {}",
-      f1.descriptor(), f2.descriptor()));
+TEST(FileTest, MoveCtor) {
+  File f = open_file();
+  int fd = f.descriptor();
+  EXPECT_NE(-1, fd);
+  File f2(std::move(f));
+  EXPECT_EQ(fd, f2.descriptor());
+  EXPECT_EQ(-1, f.descriptor());
 }
 
-TEST(FileTest, Dup2NoExceptRetry) {
-  int stdout_fd = FMT_POSIX(fileno(stdout));
-  File f1 = File::dup(stdout_fd), f2 = File::dup(stdout_fd);
-  ErrorCode ec;
-  dup2_count = 1;
-  f1.dup2(f2.descriptor(), ec);
-#ifndef _WIN32
-  EXPECT_EQ(4, dup2_count);
-#else
-  EXPECT_EQ(EINTR, ec.get());
-#endif
-  dup2_count = 0;
+TEST(FileTest, MoveAssignment) {
+  File f = open_file();
+  int fd = f.descriptor();
+  EXPECT_NE(-1, fd);
+  File f2;
+  f2 = std::move(f);
+  EXPECT_EQ(fd, f2.descriptor());
+  EXPECT_EQ(-1, f.descriptor());
 }
 
-TEST(FileTest, PipeNoRetry) {
-  File read_end, write_end;
-  pipe_count = 1;
-  EXPECT_SYSTEM_ERROR(
-      File::pipe(read_end, write_end), EINTR, "cannot create pipe");
-  pipe_count = 0;
+TEST(FileTest, MoveAssignmentClosesFile) {
+  File f = open_file();
+  File f2 = open_file();
+  int old_fd = f2.descriptor();
+  f2 = std::move(f);
+  EXPECT_TRUE(isclosed(old_fd));
 }
 
-TEST(FileTest, FdopenNoRetry) {
-  File read_end, write_end;
-  File::pipe(read_end, write_end);
-  fdopen_count = 1;
-  EXPECT_SYSTEM_ERROR(read_end.fdopen("r"),
-      EINTR, "cannot associate stream with file descriptor");
-  fdopen_count = 0;
+File OpenBufferedFile(int &fd) {
+  File f = open_file();
+  fd = f.descriptor();
+  return std::move(f);
 }
 
-TEST(BufferedFileTest, OpenRetry) {
-  write_file("test", "there must be something here");
-  BufferedFile *f = 0;
-  EXPECT_RETRY(f = new BufferedFile("test", "r"),
-               fopen, "cannot open file test");
-#ifndef _WIN32
-  char c = 0;
-  if (fread(&c, 1, 1, f->get()) < 1)
-    throw fmt::SystemError(errno, "fread failed");
-#endif
-  delete f;
+TEST(FileTest, MoveFromTemporaryInCtor) {
+  int fd = 0xdeadbeef;
+  File f(OpenBufferedFile(fd));
+  EXPECT_EQ(fd, f.descriptor());
 }
 
-TEST(BufferedFileTest, CloseNoRetryInDtor) {
-  File read_end, write_end;
-  File::pipe(read_end, write_end);
-  BufferedFile *f = new BufferedFile(read_end.fdopen("r"));
-  int saved_fclose_count = 0;
+TEST(FileTest, MoveFromTemporaryInAssignment) {
+  int fd = 0xdeadbeef;
+  File f;
+  f = OpenBufferedFile(fd);
+  EXPECT_EQ(fd, f.descriptor());
+}
+
+TEST(FileTest, MoveFromTemporaryInAssignmentClosesFile) {
+  int fd = 0xdeadbeef;
+  File f = open_file();
+  int old_fd = f.descriptor();
+  f = OpenBufferedFile(fd);
+  EXPECT_TRUE(isclosed(old_fd));
+}
+
+TEST(FileTest, CloseFileInDtor) {
+  int fd = 0;
+  {
+    File f = open_file();
+    fd = f.descriptor();
+  }
+  EXPECT_TRUE(isclosed(fd));
+}
+
+TEST(FileTest, CloseErrorInDtor) {
+  scoped_ptr<File> f(new File(open_file()));
   EXPECT_WRITE(stderr, {
-    fclose_count = 1;
-    delete f;
-    saved_fclose_count = fclose_count;
-    fclose_count = 0;
-  }, format_system_error(EINTR, "cannot close file") + "\n");
-  EXPECT_EQ(2, saved_fclose_count);
+      // The close function must be called inside EXPECT_WRITE, otherwise
+      // the system may recycle closed file descriptor when redirecting the
+      // output in EXPECT_STDERR and the second close will break output
+      // redirection.
+      FMT_POSIX(close(f->descriptor()));
+      SUPPRESS_ASSERT(f.reset());
+  }, format_system_error(EBADF, "cannot close file") + "\n");
 }
 
-TEST(BufferedFileTest, CloseNoRetry) {
-  File read_end, write_end;
-  File::pipe(read_end, write_end);
-  BufferedFile f = read_end.fdopen("r");
-  fclose_count = 1;
-  EXPECT_SYSTEM_ERROR(f.close(), EINTR, "cannot close file");
-  EXPECT_EQ(2, fclose_count);
-  fclose_count = 0;
+TEST(FileTest, Close) {
+  File f = open_file();
+  int fd = f.descriptor();
+  f.close();
+  EXPECT_EQ(-1, f.descriptor());
+  EXPECT_TRUE(isclosed(fd));
 }
 
-TEST(BufferedFileTest, FilenoNoRetry) {
+TEST(FileTest, CloseError) {
+  File f = open_file();
+  FMT_POSIX(close(f.descriptor()));
+  EXPECT_SYSTEM_ERROR_NOASSERT(f.close(), EBADF, "cannot close file");
+  EXPECT_EQ(-1, f.descriptor());
+}
+
+TEST(FileTest, Read) {
+  File f = open_file();
+  EXPECT_READ(f, FILE_CONTENT);
+}
+
+TEST(FileTest, ReadError) {
+  File f("test-file", File::WRONLY);
+  char buf;
+  // We intentionally read from a file opened in the write-only mode to
+  // cause error.
+  EXPECT_SYSTEM_ERROR(f.read(&buf, 1), EBADF, "cannot read from file");
+}
+
+TEST(FileTest, Write) {
   File read_end, write_end;
   File::pipe(read_end, write_end);
-  BufferedFile f = read_end.fdopen("r");
-  fileno_count = 1;
-  EXPECT_SYSTEM_ERROR(f.fileno(), EINTR, "cannot get file descriptor");
-  EXPECT_EQ(2, fileno_count);
-  fileno_count = 0;
+  write(write_end, "test");
+  write_end.close();
+  EXPECT_READ(read_end, "test");
+}
+
+TEST(FileTest, WriteError) {
+  File f("test-file", File::RDONLY);
+  // We intentionally write to a file opened in the read-only mode to
+  // cause error.
+  EXPECT_SYSTEM_ERROR(f.write(" ", 1), EBADF, "cannot write to file");
+}
+
+TEST(FileTest, Dup) {
+  File f = open_file();
+  File copy = File::dup(f.descriptor());
+  EXPECT_NE(f.descriptor(), copy.descriptor());
+  EXPECT_EQ(FILE_CONTENT, read(copy, std::strlen(FILE_CONTENT)));
+}
+
+TEST(FileTest, DupError) {
+  EXPECT_SYSTEM_ERROR_NOASSERT(File::dup(-1),
+      EBADF, "cannot duplicate file descriptor -1");
+}
+
+TEST(FileTest, Dup2) {
+  File f = open_file();
+  File copy = open_file();
+  f.dup2(copy.descriptor());
+  EXPECT_NE(f.descriptor(), copy.descriptor());
+  EXPECT_READ(copy, FILE_CONTENT);
+}
+
+TEST(FileTest, Dup2Error) {
+  File f = open_file();
+  EXPECT_SYSTEM_ERROR_NOASSERT(f.dup2(-1), EBADF,
+    fmt::format("cannot duplicate file descriptor {} to -1", f.descriptor()));
+}
+
+TEST(FileTest, Dup2NoExcept) {
+  File f = open_file();
+  File copy = open_file();
+  ErrorCode ec;
+  f.dup2(copy.descriptor(), ec);
+  EXPECT_EQ(0, ec.get());
+  EXPECT_NE(f.descriptor(), copy.descriptor());
+  EXPECT_READ(copy, FILE_CONTENT);
+}
+
+TEST(FileTest, Dup2NoExceptError) {
+  File f = open_file();
+  ErrorCode ec;
+  SUPPRESS_ASSERT(f.dup2(-1, ec));
+  EXPECT_EQ(EBADF, ec.get());
+}
+
+TEST(FileTest, Pipe) {
+  File read_end, write_end;
+  File::pipe(read_end, write_end);
+  EXPECT_NE(-1, read_end.descriptor());
+  EXPECT_NE(-1, write_end.descriptor());
+  write(write_end, "test");
+  EXPECT_READ(read_end, "test");
+}
+
+TEST(FileTest, Fdopen) {
+  File read_end, write_end;
+  File::pipe(read_end, write_end);
+  int read_fd = read_end.descriptor();
+  EXPECT_EQ(read_fd, FMT_POSIX(fileno(read_end.fdopen("r").get())));
+}
+
+TEST(FileTest, FdopenError) {
+  File f;
+  EXPECT_SYSTEM_ERROR_NOASSERT(
+      f.fdopen("r"), EBADF, "cannot associate stream with file descriptor");
 }
