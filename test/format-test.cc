@@ -1324,6 +1324,11 @@ TEST(FormatterTest, FormatChar) {
   EXPECT_EQ(fmt::format("{:02X}", n), fmt::format("{:02X}", 'x'));
 }
 
+TEST(FormatterTest, FormatUnsignedChar) {
+  EXPECT_EQ("42", format("{}", static_cast<unsigned char>(42)));
+  EXPECT_EQ("42", format("{}", static_cast<uint8_t>(42)));
+}
+
 TEST(FormatterTest, FormatWChar) {
   EXPECT_EQ(L"a", format(L"{0}", L'a'));
   // This shouldn't compile:
@@ -1331,7 +1336,7 @@ TEST(FormatterTest, FormatWChar) {
 }
 
 TEST(FormatterTest, FormatCString) {
-  check_unknown_types("test", "s", "string");
+  check_unknown_types("test", "sp", "string");
   EXPECT_EQ("test", format("{0}", "test"));
   EXPECT_EQ("test", format("{0:s}", "test"));
   char nonconst[] = "nonconst";
@@ -1601,4 +1606,55 @@ TEST(FormatTest, MaxArgs) {
   EXPECT_EQ("0123456789abcde",
             fmt::format("{}{}{}{}{}{}{}{}{}{}{}{}{}{}{}",
                         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 'a', 'b', 'c', 'd', 'e'));
+}
+
+#if FMT_USE_USER_DEFINED_LITERALS
+// Passing user-defined literals directly to EXPECT_EQ causes problems
+// with macro argument stringification (#) on some versions of GCC.
+// Workaround: Assing the UDL result to a variable before the macro.
+
+using namespace fmt::literals;
+
+TEST(LiteralsTest, Format) {
+  auto udl_format = "{}c{}"_format("ab", 1);
+  EXPECT_EQ(format("{}c{}", "ab", 1), udl_format);
+  auto udl_format_w = L"{}c{}"_format(L"ab", 1);
+  EXPECT_EQ(format(L"{}c{}", L"ab", 1), udl_format_w);
+}
+
+TEST(LiteralsTest, NamedArg) {
+  auto udl_a = format("{first}{second}{first}{third}",
+                      "first"_a="abra", "second"_a="cad", "third"_a=99);
+  EXPECT_EQ(format("{first}{second}{first}{third}",
+                   fmt::arg("first", "abra"), fmt::arg("second", "cad"),
+                   fmt::arg("third", 99)),
+            udl_a);
+  auto udl_a_w = format(L"{first}{second}{first}{third}",
+                        L"first"_a=L"abra", L"second"_a=L"cad", L"third"_a=99);
+  EXPECT_EQ(format(L"{first}{second}{first}{third}",
+                   fmt::arg(L"first", L"abra"), fmt::arg(L"second", L"cad"),
+                   fmt::arg(L"third", 99)),
+            udl_a_w);
+}
+#endif // FMT_USE_USER_DEFINED_LITERALS
+
+enum TestEnum {};
+std::ostream &operator<<(std::ostream &os, TestEnum) {
+  return os << "TestEnum";
+}
+
+enum TestEnum2 { A };
+
+TEST(FormatTest, Enum) {
+  EXPECT_EQ("TestEnum", fmt::format("{}", TestEnum()));
+  EXPECT_EQ("0", fmt::format("{}", A));
+}
+
+struct EmptyTest {};
+std::ostream &operator<<(std::ostream &os, EmptyTest) {
+  return os << "";
+}
+
+TEST(FormatTest, EmptyCustomOutput) {
+  EXPECT_EQ("", fmt::format("{}", EmptyTest()));
 }

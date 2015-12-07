@@ -25,13 +25,14 @@
  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <cstdlib>  // std::exit
 #include <cstring>
 
 #include "gtest-extra.h"
 #include "posix.h"
 #include "util.h"
 
-#ifdef __MINGW32__
+#ifdef fileno
 # undef fileno
 #endif
 
@@ -166,7 +167,9 @@ TEST(BufferedFileTest, CloseError) {
 
 TEST(BufferedFileTest, Fileno) {
   BufferedFile f;
+#ifndef __COVERITY__
   // fileno on a null FILE pointer either crashes or returns an error.
+  // Disable Coverity because this is intentional.
   EXPECT_DEATH_IF_SUPPORTED({
     try {
       f.fileno();
@@ -174,6 +177,7 @@ TEST(BufferedFileTest, Fileno) {
       std::exit(1);
     }
   }, "");
+#endif
   f = open_buffered_file();
   EXPECT_TRUE(f.fileno() != -1);
   File copy = File::dup(f.fileno());
@@ -323,10 +327,13 @@ TEST(FileTest, Dup) {
   EXPECT_EQ(FILE_CONTENT, read(copy, std::strlen(FILE_CONTENT)));
 }
 
+#ifndef __COVERITY__
 TEST(FileTest, DupError) {
-  EXPECT_SYSTEM_ERROR_NOASSERT(File::dup(-1),
+  int value = -1;
+  EXPECT_SYSTEM_ERROR_NOASSERT(File::dup(value),
       EBADF, "cannot duplicate file descriptor -1");
 }
+#endif
 
 TEST(FileTest, Dup2) {
   File f = open_file();

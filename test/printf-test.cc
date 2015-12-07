@@ -295,10 +295,11 @@ void TestLength(const char *length_spec, U value) {
   fmt::ULongLong unsigned_value = value;
   // Apply integer promotion to the argument.
   fmt::ULongLong max = std::numeric_limits<U>::max();
-  if (max <= static_cast<unsigned>(std::numeric_limits<int>::max())) {
+  using fmt::internal::check;
+  if (check(max <= static_cast<unsigned>(std::numeric_limits<int>::max()))) {
     signed_value = static_cast<int>(value);
     unsigned_value = static_cast<int>(value);
-  } else if (max <= std::numeric_limits<unsigned>::max()) {
+  } else if (check(max <= std::numeric_limits<unsigned>::max())) {
     signed_value = static_cast<unsigned>(value);
     unsigned_value = static_cast<unsigned>(value);
   }
@@ -335,12 +336,12 @@ void TestLength(const char *length_spec) {
   TestLength<T>(length_spec, -42);
   TestLength<T>(length_spec, min);
   TestLength<T>(length_spec, max);
-  if (min >= 0 || static_cast<fmt::LongLong>(min) >
-      std::numeric_limits<fmt::LongLong>::min()) {
+  using fmt::internal::check;
+  fmt::LongLong long_long_min = std::numeric_limits<fmt::LongLong>::min();
+  if (check(min >= 0) || check(static_cast<fmt::LongLong>(min) > long_long_min))
     TestLength<T>(length_spec, fmt::LongLong(min) - 1);
-  }
   fmt::ULongLong long_long_max = std::numeric_limits<fmt::LongLong>::max();
-  if (max < 0 || static_cast<fmt::ULongLong>(max) < long_long_max)
+  if (check(max < 0 || static_cast<fmt::ULongLong>(max) < long_long_max))
     TestLength<T>(length_spec, fmt::LongLong(max) + 1);
   TestLength<T>(length_spec, std::numeric_limits<short>::min());
   TestLength<T>(length_spec, std::numeric_limits<unsigned short>::max());
@@ -370,6 +371,11 @@ TEST(PrintfTest, Length) {
   long double max = std::numeric_limits<long double>::max();
   EXPECT_PRINTF(fmt::format("{}", max), "%g", max);
   EXPECT_PRINTF(fmt::format("{}", max), "%Lg", max);
+}
+
+TEST(PrintfTest, Bool) {
+  EXPECT_PRINTF("1", "%d", true);
+  EXPECT_PRINTF("true", "%s", true);
 }
 
 TEST(PrintfTest, Int) {
@@ -417,6 +423,9 @@ TEST(PrintfTest, Char) {
 
 TEST(PrintfTest, String) {
   EXPECT_PRINTF("abc", "%s", "abc");
+  const char *null_str = 0;
+  EXPECT_PRINTF("(null)", "%s", null_str);
+  EXPECT_PRINTF("    (null)", "%10s", null_str);
   // TODO: wide string
 }
 
@@ -424,6 +433,13 @@ TEST(PrintfTest, Pointer) {
   int n;
   void *p = &n;
   EXPECT_PRINTF(fmt::format("{}", p), "%p", p);
+  p = 0;
+  EXPECT_PRINTF("(nil)", "%p", p);
+  EXPECT_PRINTF("     (nil)", "%10p", p);
+  const char *s = "test";
+  EXPECT_PRINTF(fmt::format("{:p}", s), "%p", s);
+  const char *null_str = 0;
+  EXPECT_PRINTF("(nil)", "%p", null_str);
 }
 
 TEST(PrintfTest, Custom) {
@@ -456,3 +472,7 @@ TEST(PrintfTest, PrintfError) {
   EXPECT_LT(result, 0);
 }
 #endif
+
+TEST(PrintfTest, WideString) {
+  EXPECT_EQ(L"abc", fmt::sprintf(L"%s", TestWString(L"abc")));
+}

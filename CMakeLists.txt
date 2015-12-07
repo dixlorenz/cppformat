@@ -95,7 +95,7 @@ if (BIICODE)
 endif ()
 
 add_library(cppformat ${FMT_SOURCES})
-if (BUILD_SHARED_LIBS)
+if (BUILD_SHARED_LIBS AND UNIX AND NOT APPLE)
   # Fix rpmlint warning:
   # unused-direct-shlib-dependency /usr/lib/libformat.so.1.1.0 /lib/libm.so.6.
   target_link_libraries(cppformat -Wl,--as-needed)
@@ -117,6 +117,14 @@ endif ()
 set_target_properties(cppformat
   PROPERTIES COMPILE_FLAGS "${FMT_EXTRA_COMPILE_FLAGS}")
 
+set(CPPFORMAT_VERSION 2.1.0)
+if (NOT CPPFORMAT_VERSION MATCHES "^([0-9]+).([0-9]+).([0-9]+)$")
+  message(FATAL_ERROR "Invalid version format ${CPPFORMAT_VERSION}.")
+endif ()
+set(CPACK_PACKAGE_VERSION_MAJOR ${CMAKE_MATCH_1})
+set(CPACK_PACKAGE_VERSION_MINOR ${CMAKE_MATCH_2})
+set(CPACK_PACKAGE_VERSION_PATCH ${CMAKE_MATCH_3})
+
 if (FMT_DOC)
   add_subdirectory(doc)
 endif ()
@@ -126,11 +134,6 @@ if (FMT_TEST)
   add_subdirectory(test)
 endif ()
 
-set(CPACK_PACKAGE_VERSION_MAJOR 1)
-set(CPACK_PACKAGE_VERSION_MINOR 2)
-set(CPACK_PACKAGE_VERSION_PATCH 0)
-set(CPPFORMAT_VERSION
-  ${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH})
 set_target_properties(cppformat PROPERTIES
   VERSION ${CPPFORMAT_VERSION} SOVERSION ${CPACK_PACKAGE_VERSION_MAJOR})
 

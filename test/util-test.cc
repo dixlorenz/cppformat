@@ -30,6 +30,7 @@
 #include <cfloat>
 #include <climits>
 #include <cstring>
+#include <functional>
 #include <limits>
 
 #if FMT_USE_TYPE_TRAITS
@@ -68,9 +69,9 @@ std::basic_ostream<Char> &operator<<(std::basic_ostream<Char> &os, Test) {
 
 template <typename Char, typename T>
 Arg make_arg(const T &value) {
-  Arg arg = fmt::internal::MakeValue<Char>(value);
-  arg.type = static_cast<Arg::Type>(
-        fmt::internal::MakeValue<Char>::type(value));
+  typedef fmt::internal::MakeValue< fmt::BasicFormatter<Char> > MakeValue;
+  Arg arg = MakeValue(value);
+  arg.type = static_cast<Arg::Type>(MakeValue::type(value));
   return arg;
 }
 }  // namespace
@@ -470,11 +471,6 @@ TEST(ArgTest, MakeArg) {
   EXPECT_ARG_(wchar_t, BOOL, bool, int, true);
 
   // Test char.
-  EXPECT_ARG(CHAR, signed char, 'a');
-  EXPECT_ARG(CHAR, signed char, SCHAR_MIN);
-  EXPECT_ARG(CHAR, signed char, SCHAR_MAX);
-  EXPECT_ARG(CHAR, unsigned char, 'a');
-  EXPECT_ARG(CHAR, unsigned char, UCHAR_MAX );
   EXPECT_ARG(CHAR, char, 'a');
   EXPECT_ARG(CHAR, char, CHAR_MIN);
   EXPECT_ARG(CHAR, char, CHAR_MAX);
@@ -483,6 +479,13 @@ TEST(ArgTest, MakeArg) {
   EXPECT_ARGW(CHAR, wchar_t, L'a');
   EXPECT_ARGW(CHAR, wchar_t, WCHAR_MIN);
   EXPECT_ARGW(CHAR, wchar_t, WCHAR_MAX);
+
+  // Test signed/unsigned char.
+  EXPECT_ARG(INT, signed char, 42);
+  EXPECT_ARG(INT, signed char, SCHAR_MIN);
+  EXPECT_ARG(INT, signed char, SCHAR_MAX);
+  EXPECT_ARG(UINT, unsigned char, 42);
+  EXPECT_ARG(UINT, unsigned char, UCHAR_MAX );
 
   // Test short.
   EXPECT_ARG(INT, short, 42);
@@ -572,6 +575,23 @@ TEST(UtilTest, ArgList) {
   EXPECT_EQ(Arg::NONE, args[1].type);
 }
 
+struct CustomFormatter {
+  typedef char Char;
+};
+
+void format(CustomFormatter &, const char *&s, const Test &) {
+  s = "custom_format";
+}
+
+TEST(UtilTest, MakeValueWithCustomFormatter) {
+  ::Test t;
+  Arg arg = fmt::internal::MakeValue<CustomFormatter>(t);
+  CustomFormatter formatter;
+  const char *s = "";
+  arg.custom.format(&formatter, &t, &s);
+  EXPECT_STREQ("custom_format", s);
+}
+
 struct Result {
   Arg arg;
 
@@ -590,6 +610,7 @@ struct TestVisitor : fmt::internal::ArgVisitor<TestVisitor, Result> {
   Result visit_double(double value) { return value; }
   Result visit_long_double(long double value) { return value; }
   Result visit_char(int value) { return static_cast<char>(value); }
+  Result visit_cstring(const char *s) { return s; }
   Result visit_string(Arg::StringValue<char> s) { return s.value; }
   Result visit_wstring(Arg::StringValue<wchar_t> s) { return s.value; }
   Result visit_pointer(const void *p) { return p; }
@@ -705,6 +726,33 @@ TEST(UtilTest, StringRef) {
   EXPECT_LT(std::strlen(str), sizeof(str));
 }
 
+// Check StringRef's comparison operator.
+template <template <typename> class Op>
+void CheckOp() {
+  const char *inputs[] = {"foo", "fop", "fo"};
+  std::size_t num_inputs = sizeof(inputs) / sizeof(*inputs);
+  for (std::size_t i = 0; i < num_inputs; ++i) {
+    for (std::size_t j = 0; j < num_inputs; ++j) {
+      StringRef lhs(inputs[i]), rhs(inputs[j]);
+      EXPECT_EQ(Op<int>()(lhs.compare(rhs), 0), Op<StringRef>()(lhs, rhs));
+    }
+  }
+}
+
+TEST(UtilTest, StringRefCompare) {
+  EXPECT_EQ(0, StringRef("foo").compare(StringRef("foo")));
+  EXPECT_GT(StringRef("fop").compare(StringRef("foo")), 0);
+  EXPECT_LT(StringRef("foo").compare(StringRef("fop")), 0);
+  EXPECT_GT(StringRef("foo").compare(StringRef("fo")), 0);
+  EXPECT_LT(StringRef("fo").compare(StringRef("foo")), 0);
+  CheckOp<std::equal_to>();
+  CheckOp<std::not_equal_to>();
+  CheckOp<std::less>();
+  CheckOp<std::less_equal>();
+  CheckOp<std::greater>();
+  CheckOp<std::greater_equal>();
+}
+
 TEST(UtilTest, CountDigits) {
   test_count_digits<uint32_t>();
   test_count_digits<uint64_t>();
@@ -784,7 +832,7 @@ TEST(UtilTest, FormatSystemError) {
   EXPECT_EQ(fmt::format("test: {}", get_system_error(EDOM)), message.str());
   message.clear();
   fmt::internal::format_system_error(
-        message, EDOM, fmt::StringRef("x", std::numeric_limits<size_t>::max()));
+        message, EDOM, fmt::StringRef(0, std::numeric_limits<size_t>::max()));
   EXPECT_EQ(fmt::format("error {}", EDOM), message.str());
 }
 
@@ -820,7 +868,7 @@ TEST(UtilTest, FormatWindowsError) {
   actual_message.clear();
   fmt::internal::format_windows_error(
         actual_message, ERROR_FILE_EXISTS,
-        fmt::StringRef("x", std::numeric_limits<size_t>::max()));
+        fmt::StringRef(0, std::numeric_limits<size_t>::max()));
   EXPECT_EQ(fmt::format("error {}", ERROR_FILE_EXISTS), actual_message.str());
 }
 
@@ -839,15 +887,21 @@ TEST(UtilTest, ReportWindowsError) {
 
 #endif  // _WIN32
 
-TEST(UtilTest, IsConvertibleToInt) {
-  EXPECT_TRUE(fmt::internal::IsConvertibleToInt<char>::value);
-  EXPECT_FALSE(fmt::internal::IsConvertibleToInt<const char *>::value);
+enum TestEnum2 {};
+enum TestEnum3 {};
+std::ostream &operator<<(std::ostream &, TestEnum3);
+
+TEST(UtilTest, ConvertToInt) {
+  EXPECT_TRUE(fmt::internal::ConvertToInt<char>::enable_conversion);
+  EXPECT_FALSE(fmt::internal::ConvertToInt<const char *>::enable_conversion);
+  EXPECT_TRUE(fmt::internal::ConvertToInt<TestEnum2>::value);
+  EXPECT_FALSE(fmt::internal::ConvertToInt<TestEnum3>::value);
 }
 
 #if FMT_USE_ENUM_BASE
 enum TestEnum : char {TestValue};
 TEST(UtilTest, IsEnumConvertibleToInt) {
-  EXPECT_TRUE(fmt::internal::IsConvertibleToInt<TestEnum>::value);
+  EXPECT_TRUE(fmt::internal::ConvertToInt<TestEnum>::enable_conversion);
 }
 #endif
 

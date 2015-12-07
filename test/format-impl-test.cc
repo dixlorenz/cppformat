@@ -49,7 +49,7 @@ TEST(FormatTest, ArgConverter) {
 
 TEST(FormatTest, FormatNegativeNaN) {
   double nan = std::numeric_limits<double>::quiet_NaN();
-  if (fmt::internal::getsign(-nan))
+  if (fmt::internal::FPUtil::isnegative(-nan))
     EXPECT_EQ("-nan", fmt::format("{}", -nan));
   else
     fmt::print("Warning: compiler doesn't handle negative NaN correctly");
@@ -61,7 +61,7 @@ TEST(FormatTest, StrError) {
   EXPECT_ASSERT(fmt::safe_strerror(EDOM, message = 0, 0), "invalid buffer");
   EXPECT_ASSERT(fmt::safe_strerror(EDOM, message = buffer, 0), "invalid buffer");
   buffer[0] = 'x';
-#ifdef _GNU_SOURCE
+#if defined(_GNU_SOURCE) && !defined(__COVERITY__)
   // Use invalid error code to make sure that safe_strerror returns an error
   // message in the buffer rather than a pointer to a static string.
   int error_code = -1;
