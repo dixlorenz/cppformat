@@ -27,7 +27,10 @@
 
 #include "DLStdInclude.h"
 
-#include "format.h"
+#pragma clang diagnostic push
+   #pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
+   #include "format.h"
+#pragma clang diagnostic pop
 
 #include <string.h>
 
@@ -152,7 +155,7 @@ typedef void (*FormatFunc)(fmt::Writer &, int, fmt::StringRef);
 // Buffer should be at least of size 1.
 int safe_strerror(
     int error_code, char *&buffer, std::size_t buffer_size) FMT_NOEXCEPT {
-  FMT_ASSERT(buffer != 0 && buffer_size != 0, "invalid buffer");
+  FMT_ASSERT(buffer != nullptr && buffer_size != 0, "invalid buffer");
 
   class StrError {
    private:
@@ -202,7 +205,7 @@ int safe_strerror(
       : error_code_(err_code), buffer_(buf), buffer_size_(buf_size) {}
 
     int run() {
-      strerror_r(0, 0, "");  // Suppress a warning about unused strerror_r.
+      strerror_r(0, nullptr, "");  // Suppress a warning about unused strerror_r.
       return handle(strerror_r(error_code_, buffer_, buffer_size_));
     }
   };
@@ -615,7 +618,7 @@ void fmt::internal::ArgMap<Char>::init(const ArgList &args) {
   if (!map_.empty())
     return;
   typedef internal::NamedArg<Char> NamedArg;
-  const NamedArg *named_arg = 0;
+  const NamedArg *named_arg = nullptr;
   bool use_values =
       args.type(ArgList::MAX_PACKED_ARGS - 1) == internal::Arg::NONE;
   if (use_values) {
@@ -706,7 +709,7 @@ template <typename Char>
 Arg fmt::internal::PrintfFormatter<Char>::get_arg(
     const Char *s, unsigned arg_index) {
   (void)s;
-  const char *error = 0;
+  const char *error = nullptr;
   Arg arg = arg_index == UINT_MAX ?
     next_arg(error) : FormatterBase::get_arg(arg_index - 1, error);
   if (error)
