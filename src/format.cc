@@ -5,6 +5,8 @@
 //
 // For the license information refer to format.h.
 
+#include "DLStdInclude.h"
+
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 #pragma clang diagnostic ignored "-Wmissing-variable-declarations"
 
